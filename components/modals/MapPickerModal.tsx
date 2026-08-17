@@ -2,17 +2,27 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, MapPin, Move } from 'lucide-react';
-import { DEFAULT_MAP_CENTER, House, TILE_PROVIDERS } from '@/lib/types/gis';
+import { DEFAULT_MAP_CENTER, TILE_PROVIDERS } from '@/lib/types/gis';
 
 export type PickerLayer = 'osm' | 'satellite';
 
 export interface MapPickerModalProps {
-  house: House;
+  title: string;
+  subtitle: string;
+  initialLat: number | null;
+  initialLng: number | null;
   onConfirm: (lat: number, lng: number) => void;
   onClose: () => void;
 }
 
-export default function MapPickerModal({ house, onConfirm, onClose }: MapPickerModalProps) {
+export default function MapPickerModal({
+  title,
+  subtitle,
+  initialLat,
+  initialLng,
+  onConfirm,
+  onClose
+}: MapPickerModalProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -20,8 +30,8 @@ export default function MapPickerModal({ house, onConfirm, onClose }: MapPickerM
 
   const [layer, setLayer] = useState<PickerLayer>('osm');
   const [coord, setCoord] = useState<{ lat: number; lng: number }>({
-    lat: house.latitude ?? DEFAULT_MAP_CENTER[0],
-    lng: house.longitude ?? DEFAULT_MAP_CENTER[1]
+    lat: initialLat ?? DEFAULT_MAP_CENTER[0],
+    lng: initialLng ?? DEFAULT_MAP_CENTER[1]
   });
 
   // Initialise the picker map with a single draggable red pin
@@ -33,14 +43,14 @@ export default function MapPickerModal({ house, onConfirm, onClose }: MapPickerM
       if (!isMounted || !mapContainerRef.current || mapInstanceRef.current) return;
 
       const start: [number, number] = [
-        house.latitude ?? DEFAULT_MAP_CENTER[0],
-        house.longitude ?? DEFAULT_MAP_CENTER[1]
+        initialLat ?? DEFAULT_MAP_CENTER[0],
+        initialLng ?? DEFAULT_MAP_CENTER[1]
       ];
 
       const map = L.map(mapContainerRef.current, {
         center: start,
-        // A house that already has a coordinate only needs fine tuning
-        zoom: house.latitude !== null ? 18 : 15,
+        // An existing coordinate only needs fine tuning
+        zoom: initialLat !== null ? 18 : 15,
         zoomControl: false
       });
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -89,7 +99,7 @@ export default function MapPickerModal({ house, onConfirm, onClose }: MapPickerM
         mapInstanceRef.current = null;
       }
     };
-  }, [house]);
+  }, [initialLat, initialLng]);
 
   // Swap the base layer without touching the pin or the current view
   useEffect(() => {
@@ -123,10 +133,8 @@ export default function MapPickerModal({ house, onConfirm, onClose }: MapPickerM
               <MapPin size={22} />
             </span>
             <div>
-              <div className="modal-house-title">เลือกตำแหน่งบ้านเลขที่ {house.address}</div>
-              <div className="modal-house-subtitle">
-                หมู่ {house.village_moo} {house.village_name} • ลากหมุดสีแดงไปยังตำแหน่งบ้านจริง
-              </div>
+              <div className="modal-house-title">{title}</div>
+              <div className="modal-house-subtitle">{subtitle}</div>
             </div>
           </div>
           <button className="modal-close-btn" onClick={onClose} aria-label="ปิด">&times;</button>

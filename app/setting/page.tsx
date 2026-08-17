@@ -2,16 +2,38 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { Ambulance, ArrowLeft, Handshake, LucideIcon, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { bootstrapAddon } from '@/lib/services/bmsClient';
 import { AppSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from '@/lib/services/settingsStore';
 import { AddonContext } from '@/lib/types/bms';
 import { GroupKind, GroupList } from '@/lib/types/gis';
 import GroupMembersModal from '@/components/modals/GroupMembersModal';
 
-const GROUP_META: Record<GroupKind, { label: string; placeholder: string }> = {
-  vulnerable: { label: 'กลุ่มเปราะบาง', placeholder: 'เช่น ผู้ป่วยติดเตียง หมู่ 1' },
-  epidemic: { label: 'กลุ่มระบาดวิทยาและควบคุมโรค', placeholder: 'เช่น เฝ้าระวังไข้เลือดออก ส.ค. 69' }
+const GROUP_META: Record<GroupKind, { label: string; short: string; icon: LucideIcon; placeholder: string }> = {
+  vulnerable: {
+    label: 'กลุ่มติดตามต่อเนื่อง',
+    short: 'ติดตามต่อเนื่อง',
+    icon: Users,
+    placeholder: 'เช่น ผู้ป่วยติดเตียง หมู่ 1'
+  },
+  epidemic: {
+    label: 'กลุ่มระบาดวิทยาและควบคุมโรค',
+    short: 'ระบาดวิทยา',
+    icon: ShieldAlert,
+    placeholder: 'เช่น เฝ้าระวังไข้เลือดออก ส.ค. 69'
+  },
+  partner: {
+    label: 'ภาคีเครือข่าย',
+    short: 'ภาคีเครือข่าย',
+    icon: Handshake,
+    placeholder: 'เช่น วัดและโรงเรียนในเขต'
+  },
+  resource: {
+    label: 'ทรัพยากรสุขภาพ',
+    short: 'ทรัพยากรสุขภาพ',
+    icon: Ambulance,
+    placeholder: 'เช่น จุดบริการปฐมภูมิ, รถรับส่งผู้ป่วย'
+  }
 };
 
 function todayISO(): string {
@@ -119,15 +141,17 @@ export default function SettingPage() {
         <div className="setting-tabs">
           {(Object.keys(GROUP_META) as GroupKind[]).map((kind) => {
             const count = settings.groupLists.filter((l) => l.group === kind).length;
+            const Icon = GROUP_META[kind].icon;
             return (
               <button
                 key={kind}
                 type="button"
                 className={`setting-tab-btn ${activeTab === kind ? 'active' : ''}`}
                 onClick={() => setActiveTab(kind)}
+                title={GROUP_META[kind].label}
               >
-                {kind === 'vulnerable' ? <Users size={15} /> : <ShieldAlert size={15} />}
-                {GROUP_META[kind].label}
+                <Icon size={15} />
+                {GROUP_META[kind].short}
                 {count > 0 && <span className="setting-tab-badge">{count}</span>}
               </button>
             );

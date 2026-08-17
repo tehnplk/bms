@@ -23,7 +23,7 @@ import {
 const HEALTH_GROUP_OPTIONS: Array<{ id: HealthRiskCategory | 'all'; label: string }> = [
   { id: 'all', label: '🩺 ทุกกลุ่มติดตาม' },
   { id: 'chronic', label: 'ผู้ป่วยโรคเรื้อรัง (NCDs)' },
-  { id: 'vulnerable', label: 'กลุ่มเปราะบาง / ติดเตียง / ผู้พิการ' },
+  { id: 'vulnerable', label: 'กลุ่มติดตามต่อเนื่อง' },
   { id: 'mch', label: 'หญิงตั้งครรภ์ & ทารกแรกเกิด' },
   { id: 'epidemic', label: 'กลุ่มระบาดวิทยาและควบคุมโรค' },
   { id: 'unmapped', label: 'บ้านที่ยังไม่มีพิกัด' }
@@ -142,7 +142,8 @@ export default function Navbar({
           <Map size={20} style={{ color: '#0284c7' }} />
         </div>
         <div className="brand-text">
-          <div className="brand-title">Smart GIS</div>
+          <div className="brand-title">Welness Map View</div>
+          <div className="brand-subtitle">ชุมชนสุขภาวะ</div>
         </div>
       </div>
 
@@ -310,7 +311,7 @@ export default function Navbar({
       {/* Right Controls: Hospital Badge, Tile Switcher, Right Panel Toggle & Refresh */}
       <div className="navbar-actions">
         {/* Settings Page Link */}
-        <Link href="/setting" className="navbar-icon-btn panel-toggle-btn" title="ตั้งค่ากลุ่มเปราะบาง และกลุ่มระบาดวิทยา">
+        <Link href="/setting" className="navbar-icon-btn panel-toggle-btn" title="ตั้งค่ากลุ่มติดตามต่อเนื่อง และกลุ่มระบาดวิทยา">
           <Settings size={17} />
           <span className="btn-label-responsive">ตั้งค่า</span>
         </Link>

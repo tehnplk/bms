@@ -280,7 +280,7 @@ export default function RightPanel({
                   >
                     <div className="health-stat-left">
                       <span className="dot dot-vulnerable"></span>
-                      <span className="health-name">กลุ่มเปราะบาง / ติดเตียง / ผู้พิการ</span>
+                      <span className="health-name">กลุ่มติดตามต่อเนื่อง</span>
                     </div>
                     <span className="health-badge-count count-vulnerable">{stats.vulnerablePeople} คน</span>
                   </div>
@@ -448,7 +448,7 @@ export default function RightPanel({
 
                         {/* Health Tags */}
                         <div className="card-tags-row">
-                          {house.has_vulnerable && <span className="mini-tag tag-vulnerable">เปราะบาง</span>}
+                          {house.has_vulnerable && <span className="mini-tag tag-vulnerable">ติดตามต่อเนื่อง</span>}
                           {house.has_chronic && <span className="mini-tag tag-chronic">NCD</span>}
                           {house.has_mch && <span className="mini-tag tag-mch">แม่&amp;เด็ก</span>}
                         </div>

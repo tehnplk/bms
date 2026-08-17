@@ -127,6 +127,11 @@ html, body {
   line-height: 1.15;
 }
 
+.brand-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 .navbar-controls {
   flex: 1;
   display: flex;
@@ -2908,6 +2913,29 @@ input:checked + .toggle-slider::before {
   height: 1px;
   margin: 2px 4px;
   background: var(--border-color);
+}
+
+.place-marker-wrapper {
+  background: none;
+  border: none;
+}
+
+.place-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  background: var(--place-color);
+  border: 2px solid #ffffff;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.place-marker svg {
+  transform: rotate(45deg);
 }
 
 .map-tile-switch {

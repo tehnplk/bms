@@ -8,6 +8,21 @@ export type GisLayerDisplayMode = 'point' | 'cluster';
 export type BaseTileLayer = 'osm' | 'satellite' | 'dark';
 export type MapTool = 'none' | 'distance' | 'polygon' | 'radius';
 
+export interface PlacePoint {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  note?: string;
+  group: 'partner' | 'resource';
+  listName: string;
+}
+
+const PLACE_STYLE = {
+  partner: { color: '#7c3aed', label: 'ภาคีเครือข่าย' },
+  resource: { color: '#0d9488', label: 'ทรัพยากรสุขภาพ' }
+};
+
 export interface MapViewProps {
   houses: House[];
   displayMode?: GisLayerDisplayMode;
@@ -18,6 +33,8 @@ export interface MapViewProps {
   pickedLat?: number | null;
   pickedLng?: number | null;
   selectedHouseId?: number | null;
+  /** Partner / resource points from lists switched on for the map */
+  placePoints?: PlacePoint[];
   onHouseSelect: (house: House) => void;
   onBaseLayerChange?: (layer: BaseTileLayer) => void;
   onCoordinatePicked?: (lat: number, lng: number) => void;
@@ -89,6 +106,7 @@ export default function MapView({
   pickedLat = null,
   pickedLng = null,
   selectedHouseId = null,
+  placePoints = [],
   onHouseSelect,
   onBaseLayerChange,
   onCoordinatePicked
@@ -493,6 +511,49 @@ export default function MapView({
     renderLayers();
   }, [isMapReady, houses, displayMode, showHeatmap, isPickMode, onHouseSelect]);
 
+  // 3b. Partner / resource points
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    if (!isMapReady || !map || !L) return;
+
+    const group = L.layerGroup().addTo(map);
+
+    placePoints.forEach((p) => {
+      const style = PLACE_STYLE[p.group];
+      const icon = L.divIcon({
+        html: `
+          <div class="place-marker" style="--place-color: ${style.color}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+        `,
+        className: 'place-marker-wrapper',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        popupAnchor: [0, -26]
+      });
+
+      L.marker([p.latitude, p.longitude], { icon })
+        .bindPopup(`
+          <div class="house-popup-card">
+            <div class="popup-header">
+              <div class="popup-title"><strong>${p.name}</strong></div>
+              <span class="health-tag" style="background:${style.color}1a;color:${style.color}">${style.label}</span>
+            </div>
+            <div class="popup-village">${p.listName}</div>
+            ${p.note ? `<div class="popup-body"><div class="popup-row"><span class="popup-val">${p.note}</span></div></div>` : ''}
+          </div>
+        `, { className: 'custom-house-popup', maxWidth: 260 })
+        .addTo(group);
+    });
+
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [isMapReady, placePoints]);
+
   // 4. Fly to the selected house, then open its info popup on arrival
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -704,7 +765,7 @@ export default function MapView({
 function createPopupContent(house: House): string {
   let healthTag = `<span class="health-tag tag-normal">ปกติ</span>`;
   if (house.has_vulnerable) {
-    healthTag = `<span class="health-tag tag-vulnerable">กลุ่มเปราะบาง/ติดเตียง</span>`;
+    healthTag = `<span class="health-tag tag-vulnerable">กลุ่มติดตามต่อเนื่อง</span>`;
   } else if (house.has_chronic) {
     healthTag = `<span class="health-tag tag-chronic">ผู้ป่วยเรื้อรัง NCD</span>`;
   } else if (house.has_mch) {

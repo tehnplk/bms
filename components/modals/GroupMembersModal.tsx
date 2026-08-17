@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Search, Trash2, UserPlus, Users } from 'lucide-react';
+import { MapPin, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import { dataService, SearchResultItem } from '@/lib/services/dataService';
 import { AddonContext } from '@/lib/types/bms';
-import { GroupList, GroupMember } from '@/lib/types/gis';
+import { GROUP_MEMBER_KIND, GroupList, GroupMember } from '@/lib/types/gis';
+import MapPickerModal from './MapPickerModal';
 
 export interface GroupMembersModalProps {
   ctx: AddonContext;
@@ -19,12 +20,19 @@ function todayISO(): string {
 
 export default function GroupMembersModal({ ctx, list, onChange, onClose }: GroupMembersModalProps) {
   const isEpidemic = list.group === 'epidemic';
+  const isPlaceGroup = GROUP_MEMBER_KIND[list.group] === 'place';
+
+  // Place members: name + a coordinate picked on the map
+  const [placeName, setPlaceName] = useState('');
+  const [placeNote, setPlaceNote] = useState('');
+  const [placeCoord, setPlaceCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [picked, setPicked] = useState<SearchResultItem | null>(null);
-  const [treatmentStartDate, setRegisteredDate] = useState(todayISO());
+  const [treatmentStartDate, setTreatmentStartDate] = useState(todayISO());
 
   // Only people can be enrolled, so house-only matches are dropped
   useEffect(() => {
@@ -50,6 +58,24 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
     };
   }, [query, picked, ctx]);
 
+  const addPlace = () => {
+    const name = placeName.trim();
+    if (!name || !placeCoord) return;
+    onChange([
+      ...list.members,
+      {
+        place_id: `place-${Date.now()}`,
+        place_name: name,
+        latitude: placeCoord.lat,
+        longitude: placeCoord.lng,
+        note: placeNote.trim() || undefined
+      }
+    ]);
+    setPlaceName('');
+    setPlaceNote('');
+    setPlaceCoord(null);
+  };
+
   const addMember = () => {
     if (!picked?.matchedResident) return;
     const r = picked.matchedResident;
@@ -70,7 +96,7 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
 
     setPicked(null);
     setQuery('');
-    setRegisteredDate(todayISO());
+    setTreatmentStartDate(todayISO());
   };
 
   return (
@@ -87,7 +113,7 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
             <div>
               <div className="modal-house-title">{list.name}</div>
               <div className="modal-house-subtitle">
-                สมาชิก {list.members.length} คน · สร้างเมื่อ {list.created_date}
+                {isPlaceGroup ? `${list.members.length} จุด` : `สมาชิก ${list.members.length} คน`} · สร้างเมื่อ {list.created_date}
                 {list.activeOnMap ? ' · ใช้งานบนแผนที่' : ' · ปิดการใช้งานบนแผนที่'}
               </div>
             </div>
@@ -100,11 +126,64 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
           <div className="modal-section-card">
             <div className="section-card-header">
               <span className="section-title">
-                <UserPlus size={16} />
-                เพิ่มสมาชิก
+                {isPlaceGroup ? <MapPin size={16} /> : <UserPlus size={16} />}
+                {isPlaceGroup ? 'เพิ่มจุดบนแผนที่' : 'เพิ่มสมาชิก'}
               </span>
             </div>
 
+            {isPlaceGroup ? (
+              <>
+                <div className="setting-field" style={{ marginTop: 0 }}>
+                  <label className="setting-field-label" htmlFor="place-name">ชื่อจุด</label>
+                  <input
+                    id="place-name"
+                    type="text"
+                    className="setting-input"
+                    placeholder={list.group === 'partner' ? 'เช่น วัดหนองหอย, รร.บ้านหนองหอย' : 'เช่น รพ.สต.หนองหอย, จุดวางถังออกซิเจน'}
+                    value={placeName}
+                    onChange={(e) => setPlaceName(e.target.value)}
+                  />
+                </div>
+
+                <div className="setting-field">
+                  <label className="setting-field-label" htmlFor="place-note">หมายเหตุ (ไม่บังคับ)</label>
+                  <input
+                    id="place-note"
+                    type="text"
+                    className="setting-input"
+                    placeholder="เช่น ผู้ประสานงาน เบอร์ติดต่อ เวลาทำการ"
+                    value={placeNote}
+                    onChange={(e) => setPlaceNote(e.target.value)}
+                  />
+                </div>
+
+                <div className="setting-field">
+                  <label className="setting-field-label">พิกัด</label>
+                  <div className="setting-name-row">
+                    <input
+                      type="text"
+                      className="setting-input font-mono"
+                      readOnly
+                      value={placeCoord ? `${placeCoord.lat.toFixed(6)}, ${placeCoord.lng.toFixed(6)}` : 'ยังไม่ได้ปักหมุด'}
+                    />
+                    <button type="button" className="setting-grid-btn" onClick={() => setIsPickerOpen(true)}>
+                      <MapPin size={13} />
+                      ปักหมุด
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="setting-register-btn"
+                  disabled={!placeName.trim() || !placeCoord}
+                  onClick={addPlace}
+                >
+                  <MapPin size={15} />
+                  เพิ่มจุดเข้ารายการ
+                </button>
+              </>
+            ) : (
             <div className="setting-field" style={{ marginTop: 0 }}>
               <label className="setting-field-label">ค้นชื่อผู้ป่วย หรือ HN</label>
               {picked?.matchedResident ? (
@@ -160,6 +239,7 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
                 </>
               )}
             </div>
+            )}
 
             {isEpidemic && (
               <div className="setting-field">
@@ -169,20 +249,22 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
                   type="date"
                   className="setting-input"
                   value={treatmentStartDate}
-                  onChange={(e) => setRegisteredDate(e.target.value)}
+                  onChange={(e) => setTreatmentStartDate(e.target.value)}
                 />
               </div>
             )}
 
-            <button
-              type="button"
-              className="setting-register-btn"
-              disabled={!picked}
-              onClick={addMember}
-            >
-              <UserPlus size={15} />
-              เพิ่มเข้ารายการ
-            </button>
+            {!isPlaceGroup && (
+              <button
+                type="button"
+                className="setting-register-btn"
+                disabled={!picked}
+                onClick={addMember}
+              >
+                <UserPlus size={15} />
+                เพิ่มเข้ารายการ
+              </button>
+            )}
           </div>
 
           {/* Member list */}
@@ -190,32 +272,46 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
             <div className="section-card-header">
               <span className="section-title">
                 <Users size={16} />
-                รายชื่อสมาชิก ({list.members.length} คน)
+                {isPlaceGroup
+                  ? `จุดในรายการ (${list.members.length} จุด)`
+                  : `รายชื่อสมาชิก (${list.members.length} คน)`}
               </span>
             </div>
 
             {list.members.length === 0 ? (
-              <div className="setting-person-empty">ยังไม่มีสมาชิกในรายการนี้</div>
+              <div className="setting-person-empty">
+                {isPlaceGroup ? 'ยังไม่มีจุดในรายการนี้' : 'ยังไม่มีสมาชิกในรายการนี้'}
+              </div>
             ) : (
               <div className="residents-table-wrapper">
                 <table className="residents-table">
                   <thead>
                     <tr>
                       <th style={{ width: 50 }}>ลำดับ</th>
-                      <th>ชื่อ - สกุล</th>
-                      <th>HN</th>
-                      <th>บ้านเลขที่</th>
+                      <th>{isPlaceGroup ? 'ชื่อจุด' : 'ชื่อ - สกุล'}</th>
+                      {isPlaceGroup ? <th>พิกัด</th> : <th>HN</th>}
+                      {isPlaceGroup ? <th>หมายเหตุ</th> : <th>บ้านเลขที่</th>}
                       {isEpidemic && <th>วันเริ่มรักษา</th>}
                       <th style={{ width: 50 }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.members.map((m, i) => (
-                      <tr key={m.person_id}>
+                      <tr key={m.place_id ?? m.person_id ?? i}>
                         <td className="font-mono">{i + 1}</td>
-                        <td><strong>{m.person_name}</strong></td>
-                        <td className="font-mono">{m.hn || '-'}</td>
-                        <td>{m.house_address} · ม.{m.village_moo}</td>
+                        <td><strong>{isPlaceGroup ? m.place_name : m.person_name}</strong></td>
+                        {isPlaceGroup ? (
+                          <td className="font-mono">
+                            {m.latitude?.toFixed(6)}, {m.longitude?.toFixed(6)}
+                          </td>
+                        ) : (
+                          <td className="font-mono">{m.hn || '-'}</td>
+                        )}
+                        {isPlaceGroup ? (
+                          <td>{m.note || '-'}</td>
+                        ) : (
+                          <td>{m.house_address} · ม.{m.village_moo}</td>
+                        )}
                         {isEpidemic && <td className="font-mono">{m.treatment_start_date || '-'}</td>}
                         <td>
                           <button
@@ -236,6 +332,17 @@ export default function GroupMembersModal({ ctx, list, onChange, onClose }: Grou
           </div>
         </div>
       </div>
+
+      {isPickerOpen && (
+        <MapPickerModal
+          title={`ปักหมุด${placeName.trim() ? `: ${placeName.trim()}` : ''}`}
+          subtitle={`${list.name} • ลากหมุดสีแดงไปยังตำแหน่งจริง`}
+          initialLat={placeCoord?.lat ?? null}
+          initialLng={placeCoord?.lng ?? null}
+          onConfirm={(lat, lng) => { setPlaceCoord({ lat, lng }); setIsPickerOpen(false); }}
+          onClose={() => setIsPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -65,7 +65,7 @@ export default function HouseModal({
 
   const getHealthBadge = () => {
     if (house.has_vulnerable) {
-      return <span className="health-tag tag-vulnerable">กลุ่มเปราะบาง/ติดเตียง</span>;
+      return <span className="health-tag tag-vulnerable">กลุ่มติดตามต่อเนื่อง</span>;
     }
     if (house.has_chronic) {
       return <span className="health-tag tag-chronic">ผู้ป่วยโรคเรื้อรัง NCD</span>;
@@ -249,7 +249,10 @@ export default function HouseModal({
 
       {isPickerOpen && (
         <MapPickerModal
-          house={house}
+          title={`เลือกตำแหน่งบ้านเลขที่ ${house.address}`}
+          subtitle={`หมู่ ${house.village_moo} ${house.village_name} • ลากหมุดสีแดงไปยังตำแหน่งบ้านจริง`}
+          initialLat={house.latitude}
+          initialLng={house.longitude}
           onConfirm={(lat, lng) => {
             // Fill the form, the user still confirms with บันทึกพิกัด
             setLatInput(lat.toFixed(6));

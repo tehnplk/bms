@@ -7,7 +7,7 @@ import { dataService } from '@/lib/services/dataService';
 import { AddonContext } from '@/lib/types/bms';
 import { HealthRiskCategory, House, Village } from '@/lib/types/gis';
 import { AppSettings, DEFAULT_SETTINGS, loadSettings } from '@/lib/services/settingsStore';
-import { BaseTileLayer } from '@/components/gis/MapView';
+import { BaseTileLayer, PlacePoint } from '@/components/gis/MapView';
 import Navbar from '@/components/layout/Navbar';
 import RightPanel from '@/components/drawers/RightPanel';
 import HouseModal from '@/components/modals/HouseModal';
@@ -115,6 +115,25 @@ export default function CatchmentGisPage() {
     });
   }, [houses, settings]);
 
+  // Partner / resource points from lists switched on for the map
+  const placePoints = useMemo<PlacePoint[]>(() => {
+    return settings.groupLists
+      .filter((l) => l.activeOnMap && (l.group === 'partner' || l.group === 'resource'))
+      .flatMap((l) =>
+        l.members
+          .filter((m) => m.latitude !== undefined && m.longitude !== undefined)
+          .map((m) => ({
+            id: m.place_id || `${l.id}-${m.place_name}`,
+            name: m.place_name || 'ไม่ระบุชื่อ',
+            latitude: m.latitude as number,
+            longitude: m.longitude as number,
+            note: m.note,
+            group: l.group as 'partner' | 'resource',
+            listName: l.name
+          }))
+      );
+  }, [settings]);
+
   // Filter houses by village and follow-up group selection
   const displayedHouses = useMemo(() => {
     return classifiedHouses.filter((h) => {
@@ -211,6 +230,7 @@ export default function CatchmentGisPage() {
             pickedLat={null}
             pickedLng={null}
             selectedHouseId={selectedHouse?.house_id}
+            placePoints={placePoints}
             onHouseSelect={handleMarkerSelect}
             onBaseLayerChange={(l) => setBaseLayer(l)}
           />

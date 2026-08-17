@@ -6,7 +6,7 @@ import './globals.css';
 import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
-  title: 'Smart GIS',
+  title: 'Welness Map View',
   description: 'Addon App บนมาตรฐาน BMS Session API สำหรับแสดงและจัดการพิกัดบ้านในเขตรับผิดชอบของ HOSxP พัฒนาด้วย Next.js และ Leaflet GIS',
 };
 

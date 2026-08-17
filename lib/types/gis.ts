@@ -35,18 +35,35 @@ export const DEFAULT_VULNERABLE_CRITERIA: VulnerableCriteria = {
   includeBedridden: true
 };
 
-export type GroupKind = 'vulnerable' | 'epidemic';
+export type GroupKind = 'vulnerable' | 'epidemic' | 'partner' | 'resource';
 
-/** A person enrolled in a follow-up list */
+/** Person-based groups enrol people; place-based groups pin locations */
+export type GroupMemberKind = 'person' | 'place';
+
+export const GROUP_MEMBER_KIND: Record<GroupKind, GroupMemberKind> = {
+  vulnerable: 'person',
+  epidemic: 'person',
+  partner: 'place',
+  resource: 'place'
+};
+
 export interface GroupMember {
-  person_id: number;
-  house_id: number;
-  person_name: string;
+  /** Person members (vulnerable / epidemic) */
+  person_id?: number;
+  house_id?: number;
+  person_name?: string;
   hn?: string;
-  house_address: string;
-  village_moo: number;
+  house_address?: string;
+  village_moo?: number;
   /** Epidemic lists only — the disease itself is carried by the list name */
   treatment_start_date?: string;
+
+  /** Place members (partner / resource) */
+  place_id?: string;
+  place_name?: string;
+  latitude?: number;
+  longitude?: number;
+  note?: string;
 }
 
 /** A named follow-up list inside one group */
