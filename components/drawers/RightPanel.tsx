@@ -4,9 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { House, Village, CatchmentStats, HealthRiskCategory } from '@/lib/types/gis';
 import { dataService } from '@/lib/services/dataService';
 import { 
-  ChevronRight, 
-  ChevronLeft, 
-  Layers, 
+  ChevronRight,
+  Layers,
   BarChart3, 
   Home, 
   Users, 
@@ -125,21 +124,6 @@ export default function RightPanel({
 
   return (
     <>
-      {/* Floating Expand Toggle Trigger when Panel is Collapsed */}
-      {!isOpen && (
-        <button
-          type="button"
-          className="panel-collapsed-trigger animate-fade-in"
-          onClick={onToggle}
-          title="เปิดแผงข้อมูล & คำอธิบายโครงสร้าง (person -> house -> village)"
-        >
-          <ChevronLeft size={16} />
-          <BarChart3 size={15} />
-          <span className="trigger-text">ข้อมูล & สถิติ</span>
-          <span className="trigger-badge">{stats.percentGeocoded}%</span>
-        </button>
-      )}
-
       {/* Main Right Panel Container */}
       <aside className={`right-panel-drawer ${isOpen ? 'open' : 'closed'}`}>
         {/* Panel Header */}

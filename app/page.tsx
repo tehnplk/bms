@@ -97,6 +97,13 @@ export default function CatchmentGisPage() {
     }
   };
 
+  // Stable identity, otherwise MapView tears down and rebuilds every marker
+  // on each parent re-render (village filter, base layer switch, ...)
+  const handleMarkerSelect = useCallback((house: House) => {
+    setSelectedHouse(house);
+    setIsModalOpen(true);
+  }, []);
+
   // Save coordinate back to HOSxP table 'house'
   const handleSaveCoordinate = async (houseId: number, lat: number, lng: number) => {
     try {
@@ -128,10 +135,9 @@ export default function CatchmentGisPage() {
     <div id="app-container" style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 1. Top Navbar with Live Resident/House Search and Village Filter */}
       <Navbar
-        hospitalName={ctx.session?.hospitalName || 'BMS Dev Portal Hospital'}
-        hospitalCode={ctx.session?.hospitalCode || 'DEV99'}
         ctx={ctx}
         villages={villages}
+        houses={houses}
         selectedVillageId={selectedVillageId}
         onVillageChange={(vId) => setSelectedVillageId(vId)}
         baseLayer={baseLayer}
@@ -140,7 +146,6 @@ export default function CatchmentGisPage() {
         onSelectHouse={(h) => handleSelectHouse(h, false)}
         isRightPanelOpen={isRightPanelOpen}
         onToggleRightPanel={() => setIsRightPanelOpen(prev => !prev)}
-        onRefresh={() => loadData(ctx)}
       />
 
       {/* 2. Main GIS Map Viewport & Collapsible Right Panel */}
@@ -157,10 +162,7 @@ export default function CatchmentGisPage() {
             pickedLat={null}
             pickedLng={null}
             selectedHouseId={selectedHouse?.house_id}
-            onHouseSelect={(h) => {
-              setSelectedHouse(h);
-              setIsModalOpen(true);
-            }}
+            onHouseSelect={handleMarkerSelect}
           />
         </main>
 
@@ -190,7 +192,6 @@ export default function CatchmentGisPage() {
         <HouseModal
           house={selectedHouse}
           onSaveCoordinate={handleSaveCoordinate}
-          onStartPinPick={() => {}}
           onNavigate={(lat, lng) => {
             window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
           }}

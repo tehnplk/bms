@@ -5,6 +5,21 @@
 export const DEFAULT_MAP_CENTER: [number, number] = [16.821100, 100.265900]; // Phitsanulok
 export const DEFAULT_ZOOM = 14;
 
+export const TILE_PROVIDERS = {
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+  }
+};
+
 export type HealthRiskCategory = 'normal' | 'chronic' | 'vulnerable' | 'mch' | 'unmapped';
 
 export interface Resident {

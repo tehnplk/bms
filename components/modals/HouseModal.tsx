@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { House, Resident } from '@/lib/types/gis';
+import { House } from '@/lib/types/gis';
+import MapPickerModal from './MapPickerModal';
 import { 
   Home, 
   MapPin, 
@@ -18,7 +19,6 @@ import {
 export interface HouseModalProps {
   house: House | null;
   onSaveCoordinate: (houseId: number, lat: number, lng: number) => Promise<void>;
-  onStartPinPick: (house: House) => void;
   onNavigate: (lat: number, lng: number) => void;
   onClose: () => void;
 }
@@ -26,13 +26,13 @@ export interface HouseModalProps {
 export default function HouseModal({
   house,
   onSaveCoordinate,
-  onStartPinPick,
   onNavigate,
   onClose
 }: HouseModalProps) {
   const [latInput, setLatInput] = useState<string>('');
   const [lngInput, setLngInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   useEffect(() => {
     if (house) {
@@ -153,10 +153,7 @@ export default function HouseModal({
                 <button
                   type="button"
                   className="btn-action btn-pin-pick"
-                  onClick={() => {
-                    onClose();
-                    onStartPinPick(house);
-                  }}
+                  onClick={() => setIsPickerOpen(true)}
                 >
                   <MapPin size={15} />
                   เลือกตำแหน่งบนแผนที่
@@ -249,6 +246,19 @@ export default function HouseModal({
           </div>
         </div>
       </div>
+
+      {isPickerOpen && (
+        <MapPickerModal
+          house={house}
+          onConfirm={(lat, lng) => {
+            // Fill the form, the user still confirms with บันทึกพิกัด
+            setLatInput(lat.toFixed(6));
+            setLngInput(lng.toFixed(6));
+            setIsPickerOpen(false);
+          }}
+          onClose={() => setIsPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

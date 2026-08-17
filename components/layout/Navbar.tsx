@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { House, Village } from '@/lib/types/gis';
 import { AddonContext } from '@/lib/types/bms';
 import { BaseTileLayer } from '@/components/gis/MapView';
 import { dataService, SearchResultItem } from '@/lib/services/dataService';
-import { 
-  Map, 
-  RefreshCw, 
-  Building2, 
+import {
+  Map,
+  Building2,
   Search, 
   X, 
   Home, 
@@ -21,10 +20,9 @@ import {
 } from 'lucide-react';
 
 export interface NavbarProps {
-  hospitalName?: string;
-  hospitalCode?: string;
   ctx: AddonContext;
   villages: Village[];
+  houses: House[];
   selectedVillageId: number | 'all';
   onVillageChange: (villageId: number | 'all') => void;
   baseLayer: BaseTileLayer;
@@ -33,14 +31,12 @@ export interface NavbarProps {
   onSelectHouse: (house: House) => void;
   isRightPanelOpen: boolean;
   onToggleRightPanel: () => void;
-  onRefresh?: () => void;
 }
 
 export default function Navbar({
-  hospitalName = 'BMS Dev Portal Hospital',
-  hospitalCode = 'DEV99',
   ctx,
   villages,
+  houses,
   selectedVillageId,
   onVillageChange,
   baseLayer,
@@ -48,8 +44,7 @@ export default function Navbar({
   totalHouses,
   onSelectHouse,
   isRightPanelOpen,
-  onToggleRightPanel,
-  onRefresh
+  onToggleRightPanel
 }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -58,6 +53,16 @@ export default function Navbar({
 
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Count from the loaded houses, not village.total_houses, so every option in the
+  // dropdown adds up to the "ทุกหมู่บ้าน" total and matches what selecting it shows
+  const houseCountByVillage = useMemo(() => {
+    const counts: Record<number, number> = {};
+    houses.forEach((h) => {
+      counts[h.village_id] = (counts[h.village_id] || 0) + 1;
+    });
+    return counts;
+  }, [houses]);
 
   // Search Results using person -> house -> village relationship, queried straight
   // from the HOSxP database so results are not limited to the houses already on the map
@@ -127,8 +132,7 @@ export default function Navbar({
           <Map size={20} style={{ color: '#0284c7' }} />
         </div>
         <div className="brand-text">
-          <div className="brand-title">HOSxP Catchment GIS</div>
-          <div className="brand-subtitle">ระบบแผนที่พิกัดบ้านในเขตรับผิดชอบ</div>
+          <div className="brand-title">Smart GIS</div>
         </div>
       </div>
 
@@ -149,7 +153,7 @@ export default function Navbar({
             <option value="all">📍 ทุกหมู่บ้าน ({totalHouses} หลัง)</option>
             {villages.map((v) => (
               <option key={v.village_id} value={v.village_id}>
-                หมู่ {v.village_moo} {v.village_name} {v.total_houses ? `(${v.total_houses} หลัง)` : ''}
+                หมู่ {v.village_moo} {v.village_name} ({houseCountByVillage[v.village_id] || 0} หลัง)
               </option>
             ))}
           </select>
@@ -280,13 +284,6 @@ export default function Navbar({
 
       {/* Right Controls: Hospital Badge, Tile Switcher, Right Panel Toggle & Refresh */}
       <div className="navbar-actions">
-        {/* Hospital Connection Badge */}
-        <div className="hospital-badge">
-          <span className="live-dot"></span>
-          <span className="hospital-name">{hospitalName}</span>
-          <span className="hospital-code">({hospitalCode})</span>
-        </div>
-
         {/* Tile Layer Switcher */}
         <div className="tile-toggle-group">
           <button
@@ -326,17 +323,6 @@ export default function Navbar({
           <span className="btn-label-responsive">แผงข้อมูล</span>
         </button>
 
-        {/* Refresh Button */}
-        {onRefresh && (
-          <button
-            type="button"
-            className="navbar-icon-btn"
-            onClick={onRefresh}
-            title="คิวรี่ข้อมูลพิกัดล่าสุดจากตาราง house"
-          >
-            <RefreshCw size={16} />
-          </button>
-        )}
       </div>
     </header>
   );

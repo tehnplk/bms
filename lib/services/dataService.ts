@@ -26,8 +26,8 @@ class DataService {
         village_code: '65010101',
         latitude: 16.821500,
         longitude: 100.264200,
-        total_houses: 12,
-        total_population: 38
+        total_houses: 6,
+        total_population: 13
       },
       {
         village_id: 2,
@@ -36,8 +36,8 @@ class DataService {
         village_code: '65010102',
         latitude: 16.826200,
         longitude: 100.271000,
-        total_houses: 10,
-        total_population: 29
+        total_houses: 4,
+        total_population: 6
       },
       {
         village_id: 3,
@@ -46,8 +46,8 @@ class DataService {
         village_code: '65010103',
         latitude: 16.815800,
         longitude: 100.258900,
-        total_houses: 8,
-        total_population: 24
+        total_houses: 3,
+        total_population: 3
       },
       {
         village_id: 4,
@@ -56,8 +56,8 @@ class DataService {
         village_code: '65010104',
         latitude: 16.829000,
         longitude: 100.260500,
-        total_houses: 9,
-        total_population: 27
+        total_houses: 2,
+        total_population: 2
       },
       {
         village_id: 5,
@@ -66,8 +66,8 @@ class DataService {
         village_code: '65010105',
         latitude: 16.818000,
         longitude: 100.275000,
-        total_houses: 7,
-        total_population: 20
+        total_houses: 2,
+        total_population: 2
       }
     ];
 

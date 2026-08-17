@@ -113,6 +113,7 @@ html, body {
 .brand-text {
   display: flex;
   flex-direction: column;
+  justify-content: center;
 }
 
 .brand-title {
@@ -120,11 +121,6 @@ html, body {
   font-weight: 700;
   color: var(--text-main);
   line-height: 1.15;
-}
-
-.brand-subtitle {
-  font-size: 0.7rem;
-  color: var(--text-muted);
 }
 
 .navbar-controls {
@@ -465,32 +461,6 @@ html, body {
     padding: 0;
     justify-content: center;
   }
-}
-
-.hospital-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  border-radius: var(--radius-full);
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: #065f46;
-}
-
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
-}
-
-.hospital-code {
-  color: #047857;
-  font-family: var(--font-mono);
 }
 
 .tile-toggle-group {
@@ -1290,6 +1260,17 @@ input:checked + .toggle-slider::before {
 }
 .pin-picking .pin-point { border-top-color: #f59e0b; }
 
+/* Draggable pin used by the coordinate picker modal */
+.pin-red .pin-bubble {
+  background: #dc2626;
+  width: 34px;
+  height: 34px;
+  box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.3);
+  cursor: grab;
+}
+.pin-red .pin-point { border-top-color: #dc2626; }
+.pin-red:active .pin-bubble { cursor: grabbing; }
+
 /* Custom Marker Clusters */
 .marker-cluster-custom {
   background: none;
@@ -1443,6 +1424,56 @@ input:checked + .toggle-slider::before {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   Coordinate Picker Modal (large map + draggable pin)
+   ========================================================================== */
+.modal-backdrop-nested {
+  z-index: 2100;
+}
+
+.modal-content-map {
+  max-width: 1200px;
+  height: 88vh;
+  max-height: 88vh;
+}
+
+.map-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle, #f8fafc);
+}
+
+.map-picker-readout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.map-picker-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.map-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
 }
 
 .modal-header {
@@ -1869,12 +1900,6 @@ input:checked + .toggle-slider::before {
   fill-opacity: 1 !important;
 }
 
-.gis-point-tooltip {
-  font-size: 0.78rem;
-  line-height: 1.35;
-  padding: 2px 4px;
-}
-
 .map-coord-hud {
   position: absolute;
   bottom: 8px;
@@ -2185,50 +2210,104 @@ input:checked + .toggle-slider::before {
 }
 
 /* ==========================================================================
-   Floating Collapsed Trigger Button
+   Map Measure & Draw Toolbox
    ========================================================================== */
-.panel-collapsed-trigger {
+.map-toolbox {
   position: absolute;
-  top: 72px;
-  right: 16px;
-  z-index: 990;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: var(--glass-backdrop);
   -webkit-backdrop-filter: var(--glass-backdrop);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  font-family: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-main);
+}
+
+.map-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.panel-collapsed-trigger:hover {
-  transform: translateX(-4px);
-  border-color: var(--border-focus);
-  color: var(--primary);
-  box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.25);
+.map-tool-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: var(--text-main);
 }
 
-.trigger-text {
-  font-size: 0.8rem;
+.map-tool-btn.active {
+  background: #4f46e5;
+  color: #fff;
 }
 
-.trigger-badge {
+.map-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.map-tool-clear:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.map-tool-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--border-color);
+}
+
+.map-tool-hint {
+  position: absolute;
+  top: 16px;
+  left: 60px;
+  z-index: 1000;
+  padding: 7px 12px;
+  background: rgba(79, 70, 229, 0.95);
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
+.map-tool-hint kbd {
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
-  padding: 2px 7px;
+}
+
+.map-draw-cursor,
+.map-draw-cursor .leaflet-grab {
+  cursor: crosshair !important;
+}
+
+.map-measure-label {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #4f46e5;
   border-radius: var(--radius-full);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  transform: translate(-50%, -160%);
 }
 
 /* ==========================================================================

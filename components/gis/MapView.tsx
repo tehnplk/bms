@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { DEFAULT_MAP_CENTER, DEFAULT_ZOOM, HealthRiskCategory, House } from '@/lib/types/gis';
+import { Ruler, Pentagon, CircleDashed, Trash2 } from 'lucide-react';
+import { DEFAULT_MAP_CENTER, DEFAULT_ZOOM, HealthRiskCategory, House, TILE_PROVIDERS } from '@/lib/types/gis';
 
 export type GisLayerDisplayMode = 'point' | 'cluster';
 export type BaseTileLayer = 'osm' | 'satellite' | 'dark';
+export type MapTool = 'none' | 'distance' | 'polygon' | 'radius';
 
 export interface MapViewProps {
   houses: House[];
@@ -20,20 +22,44 @@ export interface MapViewProps {
   onCoordinatePicked?: (lat: number, lng: number) => void;
 }
 
-const TILE_PROVIDERS = {
-  osm: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-  },
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
-  }
+// Indigo, kept clear of every health-category marker colour
+const DRAW_COLOR = '#4f46e5';
+// interactive:false keeps drawn shapes from swallowing the map clicks that drive
+// the tools, and from covering the house markers underneath them
+const DRAW_STYLE = {
+  color: DRAW_COLOR,
+  weight: 2.5,
+  fillColor: DRAW_COLOR,
+  fillOpacity: 0.12,
+  interactive: false
 };
+const SQM_PER_RAI = 1600;
+
+function formatDistance(meters: number): string {
+  return meters < 1000 ? `${meters.toFixed(0)} ม.` : `${(meters / 1000).toFixed(2)} กม.`;
+}
+
+function formatArea(sqm: number): string {
+  const main = sqm < 1000000 ? `${sqm.toFixed(0)} ตร.ม.` : `${(sqm / 1000000).toFixed(3)} ตร.กม.`;
+  return `${main} · ${(sqm / SQM_PER_RAI).toFixed(2)} ไร่`;
+}
+
+/**
+ * Geodesic polygon area in square metres (spherical excess on the WGS84 mean radius).
+ * Planar shoelace would understate area at Thai latitudes.
+ */
+function geodesicAreaSqm(points: Array<{ lat: number; lng: number }>): number {
+  if (points.length < 3) return 0;
+  const R = 6378137;
+  const rad = Math.PI / 180;
+  let total = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p1 = points[i];
+    const p2 = points[(i + 1) % points.length];
+    total += (p2.lng - p1.lng) * rad * (2 + Math.sin(p1.lat * rad) + Math.sin(p2.lat * rad));
+  }
+  return Math.abs((total * R * R) / 2);
+}
 
 function getCategoryColor(category: HealthRiskCategory): string {
   switch (category) {
@@ -65,10 +91,148 @@ export default function MapView({
   const clusterGroupRef = useRef<any>(null);
   const heatCircleGroupRef = useRef<any>(null);
   const activePinMarkerRef = useRef<any>(null);
+  const hasAutoFittedRef = useRef(false);
+  // Leaflet is imported asynchronously, so the layer effects below must wait for it
+  const [isMapReady, setIsMapReady] = useState(false);
   const [cursorCoord, setCursorCoord] = useState<{ lat: number; lng: number }>({
     lat: DEFAULT_MAP_CENTER[0],
     lng: DEFAULT_MAP_CENTER[1]
   });
+
+  // --- Measure / draw toolbox ---
+  const leafletRef = useRef<any>(null);
+  const measureGroupRef = useRef<any>(null);
+  const draftRef = useRef<any>(null);
+  const activeToolRef = useRef<MapTool>('none');
+  const [activeTool, setActiveTool] = useState<MapTool>('none');
+  const [shapeCount, setShapeCount] = useState(0);
+
+  const buildLabel = useCallback((latlng: any, text: string) => {
+    const L = leafletRef.current;
+    return L.marker(latlng, {
+      interactive: false,
+      icon: L.divIcon({
+        className: 'map-measure-label-wrapper',
+        html: `<span class="map-measure-label">${text}</span>`,
+        iconSize: [0, 0]
+      })
+    });
+  }, []);
+
+  /** Build the layers for a shape; dashed while drafting, solid once committed */
+  const buildShape = useCallback((tool: MapTool, points: any[], cursor: any | null, dashed: boolean) => {
+    const L = leafletRef.current;
+    const map = mapInstanceRef.current;
+    const style = dashed ? { ...DRAW_STYLE, dashArray: '6 6' } : DRAW_STYLE;
+    const layers: any[] = [];
+    let label: any = null;
+
+    if (tool === 'radius') {
+      const center = points[0];
+      if (!center) return null;
+      const edge = cursor || points[1];
+      const radius = edge ? map.distance(center, edge) : 0;
+      layers.push(L.circle(center, { ...style, radius }));
+      layers.push(L.circleMarker(center, { ...DRAW_STYLE, radius: 4, fillOpacity: 1 }));
+      label = buildLabel(center, `รัศมี ${formatDistance(radius)}`);
+    } else {
+      const pts = cursor ? [...points, cursor] : points;
+      if (pts.length < 2) return null;
+
+      if (tool === 'distance') {
+        layers.push(L.polyline(pts, style));
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) total += map.distance(pts[i - 1], pts[i]);
+        label = buildLabel(pts[pts.length - 1], formatDistance(total));
+      } else {
+        layers.push(L.polygon(pts, style));
+        if (pts.length >= 3) {
+          label = buildLabel(L.latLngBounds(pts).getCenter(), formatArea(geodesicAreaSqm(pts)));
+        }
+      }
+      pts.forEach((p) => layers.push(L.circleMarker(p, { ...DRAW_STYLE, radius: 4, fillOpacity: 1 })));
+    }
+
+    if (label) layers.push(label);
+    return L.layerGroup(layers);
+  }, [buildLabel]);
+
+  const clearDraft = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (map && draftRef.current?.preview) map.removeLayer(draftRef.current.preview);
+    draftRef.current = null;
+  }, []);
+
+  /** Switch the active tool and the map cursor with it — 'none' restores pan mode */
+  const setTool = useCallback((tool: MapTool) => {
+    activeToolRef.current = tool;
+    setActiveTool(tool);
+
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.getContainer().classList.toggle('map-draw-cursor', tool !== 'none');
+    if (tool === 'none') map.doubleClickZoom.enable();
+    else map.doubleClickZoom.disable();
+  }, []);
+
+  const renderDraft = useCallback((cursor: any | null) => {
+    const map = mapInstanceRef.current;
+    const draft = draftRef.current;
+    if (!map || !draft) return;
+
+    if (draft.preview) map.removeLayer(draft.preview);
+    draft.preview = buildShape(draft.tool, draft.points, cursor, true);
+    if (draft.preview) draft.preview.addTo(map);
+  }, [buildShape]);
+
+  const commitDraft = useCallback(() => {
+    const draft = draftRef.current;
+    if (!draft) return;
+
+    // A double-click lands its own click first, leaving the last vertex duplicated
+    const points = draft.points.filter((p: any, i: number, arr: any[]) =>
+      i === 0 || Math.abs(p.lat - arr[i - 1].lat) > 1e-9 || Math.abs(p.lng - arr[i - 1].lng) > 1e-9
+    );
+
+    const minPoints = draft.tool === 'polygon' ? 3 : 2;
+    if (points.length >= minPoints) {
+      const shape = buildShape(draft.tool, points, null, false);
+      if (shape) {
+        measureGroupRef.current.addLayer(shape);
+        setShapeCount((n) => n + 1);
+      }
+    }
+    clearDraft();
+    // The feature is finished — hand the map back in pan mode
+    setTool('none');
+  }, [buildShape, clearDraft, setTool]);
+
+  const handleToolClick = useCallback((latlng: any) => {
+    const tool = activeToolRef.current;
+    if (tool === 'none') return;
+
+    if (!draftRef.current) {
+      draftRef.current = { tool, points: [latlng], preview: null };
+      renderDraft(null);
+      return;
+    }
+
+    draftRef.current.points.push(latlng);
+    // A radius is fully defined by its centre and one edge point
+    if (tool === 'radius') commitDraft();
+    else renderDraft(null);
+  }, [renderDraft, commitDraft]);
+
+  const selectTool = useCallback((tool: MapTool) => {
+    clearDraft();
+    setTool(activeToolRef.current === tool ? 'none' : tool);
+  }, [clearDraft, setTool]);
+
+  const clearAllShapes = useCallback(() => {
+    clearDraft();
+    measureGroupRef.current?.clearLayers();
+    setShapeCount(0);
+  }, [clearDraft]);
 
   // 1. Initialize Map
   useEffect(() => {
@@ -102,25 +266,43 @@ export default function MapView({
       // Heat Circle Group
       heatCircleGroupRef.current = L.layerGroup().addTo(map);
 
+      // Measure / draw toolbox layer
+      leafletRef.current = L;
+      measureGroupRef.current = L.layerGroup().addTo(map);
+
       // Cursor movement HUD
       map.on('mousemove', (e: any) => {
         setCursorCoord({ lat: e.latlng.lat, lng: e.latlng.lng });
+        if (draftRef.current) renderDraft(e.latlng);
       });
 
       // Map Click Handler for Pick Mode
       map.on('click', (e: any) => {
+        if (activeToolRef.current !== 'none') {
+          handleToolClick(e.latlng);
+          return;
+        }
         if (onCoordinatePicked) {
           onCoordinatePicked(e.latlng.lat, e.latlng.lng);
         }
       });
 
+      // Double-click closes a distance line or polygon
+      map.on('dblclick', () => {
+        if (activeToolRef.current === 'distance' || activeToolRef.current === 'polygon') {
+          commitDraft();
+        }
+      });
+
       mapInstanceRef.current = map;
+      setIsMapReady(true);
     }
 
     initLeaflet();
 
     return () => {
       isMounted = false;
+      setIsMapReady(false);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -253,14 +435,6 @@ export default function MapView({
         // Attach house metadata to marker for cluster calculation
         marker.houseData = house;
 
-        // Tooltip
-        marker.bindTooltip(`
-          <div class="gis-point-tooltip">
-            <strong>บ้านเลขที่ ${house.address}</strong> ม.${house.village_moo} ${house.village_name}<br/>
-            <span class="font-mono text-muted">[Lat: ${house.latitude.toFixed(6)}, Lng: ${house.longitude.toFixed(6)}]</span>
-          </div>
-        `, { direction: 'top', offset: [0, -6], opacity: 0.95 });
-
         // Popup
         marker.bindPopup(createPopupContent(house), {
           className: 'custom-house-popup',
@@ -295,15 +469,17 @@ export default function MapView({
       clusterGroupRef.current = clusterGroup;
       map.addLayer(clusterGroup);
 
-      // Auto fit bounds if houses available
-      if (validHouses.length > 0 && !isPickMode) {
+      // Auto fit bounds once only — re-rendering the layers must never move the
+      // view the user has panned or zoomed to (e.g. after switching base layer)
+      if (validHouses.length > 0 && !isPickMode && !hasAutoFittedRef.current) {
+        hasAutoFittedRef.current = true;
         const bounds = L.latLngBounds(validHouses.map(h => [h.latitude!, h.longitude!]));
         map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
       }
     }
 
     renderLayers();
-  }, [houses, displayMode, showHeatmap, isPickMode, onHouseSelect]);
+  }, [isMapReady, houses, displayMode, showHeatmap, isPickMode, onHouseSelect]);
 
   // 4. Fly to selected house
   useEffect(() => {
@@ -369,9 +545,92 @@ export default function MapView({
     updatePicker();
   }, [isPickMode, pickingHouse, pickedLat, pickedLng, onCoordinatePicked]);
 
+  // 6. Keep Leaflet's viewport in sync with the container size. Collapsing the
+  // right panel widens the map, and without this Leaflet leaves the new strip
+  // blank because it still believes the container is the old width.
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    const map = mapInstanceRef.current;
+    if (!isMapReady || !container || !map) return;
+
+    // pan:false keeps what is already on screen still and just reveals more map
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false, pan: false });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isMapReady]);
+
+  // 7. Escape cancels the shape being drawn, then leaves the tool
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || activeToolRef.current === 'none') return;
+      if (draftRef.current) clearDraft();
+      else selectTool('none');
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [clearDraft, selectTool]);
+
+  const TOOLS: Array<{ id: MapTool; icon: React.ReactNode; label: string; hint: string }> = [
+    {
+      id: 'distance',
+      icon: <Ruler size={16} />,
+      label: 'วัดระยะ',
+      hint: 'คลิกวางจุดต่อเนื่อง — ดับเบิลคลิกเพื่อจบเส้น'
+    },
+    {
+      id: 'polygon',
+      icon: <Pentagon size={16} />,
+      label: 'วาด Polygon',
+      hint: 'คลิกวางมุมอย่างน้อย 3 จุด — ดับเบิลคลิกเพื่อปิดรูป'
+    },
+    {
+      id: 'radius',
+      icon: <CircleDashed size={16} />,
+      label: 'วาดรัศมี',
+      hint: 'คลิกจุดศูนย์กลาง แล้วคลิกอีกครั้งเพื่อกำหนดรัศมี'
+    }
+  ];
+
+  const activeHint = TOOLS.find((t) => t.id === activeTool)?.hint;
+
   return (
     <div className="relative w-full h-full" style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={mapContainerRef} id="map-container" style={{ width: '100%', height: '100%' }} />
+
+      {/* Measure & draw toolbox */}
+      <div className="map-toolbox">
+        {TOOLS.map((tool) => (
+          <button
+            key={tool.id}
+            type="button"
+            className={`map-tool-btn ${activeTool === tool.id ? 'active' : ''}`}
+            onClick={() => selectTool(tool.id)}
+            title={`${tool.label} — ${tool.hint}`}
+            aria-pressed={activeTool === tool.id}
+          >
+            {tool.icon}
+          </button>
+        ))}
+        <div className="map-tool-divider" />
+        <button
+          type="button"
+          className="map-tool-btn map-tool-clear"
+          onClick={clearAllShapes}
+          disabled={shapeCount === 0}
+          title={shapeCount === 0 ? 'ยังไม่มีรูปที่วาด' : `ล้างรูปที่วาดทั้งหมด (${shapeCount})`}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      {activeHint && (
+        <div className="map-tool-hint">
+          {activeHint} · กด <kbd>Esc</kbd> เพื่อยกเลิก
+        </div>
+      )}
+
       <div id="map-coord-hud" className="map-coord-hud">
         พิกัดเคอร์เซอร์: Lat {cursorCoord.lat.toFixed(6)}, Lng {cursorCoord.lng.toFixed(6)}
       </div>
