@@ -20,7 +20,42 @@ export const TILE_PROVIDERS = {
   }
 };
 
-export type HealthRiskCategory = 'normal' | 'chronic' | 'vulnerable' | 'mch' | 'unmapped';
+export type HealthRiskCategory = 'normal' | 'chronic' | 'vulnerable' | 'mch' | 'epidemic' | 'unmapped';
+
+/** Tunable rules that decide which houses count as vulnerable */
+export interface VulnerableCriteria {
+  elderlyAge: number;
+  includeDisabled: boolean;
+  includeBedridden: boolean;
+}
+
+export const DEFAULT_VULNERABLE_CRITERIA: VulnerableCriteria = {
+  elderlyAge: 75,
+  includeDisabled: true,
+  includeBedridden: true
+};
+
+/** One communicable-disease case registered against a person */
+export interface EpidemicCase {
+  person_id: number;
+  house_id: number;
+  person_name: string;
+  hn?: string;
+  disease: string;
+  registered_date: string; // YYYY-MM-DD
+}
+
+export const EPIDEMIC_DISEASES = [
+  'ไข้เลือดออก',
+  'โควิด-19',
+  'ไข้หวัดใหญ่',
+  'มือ เท้า ปาก',
+  'อุจจาระร่วงเฉียบพลัน',
+  'วัณโรคปอด',
+  'เลปโตสไปโรซิส (ฉี่หนู)',
+  'ชิคุนกุนยา',
+  'หัด'
+];
 
 export interface Resident {
   person_id: number;
@@ -63,6 +98,7 @@ export interface House {
   has_chronic: boolean;
   has_vulnerable: boolean;
   has_mch: boolean;
+  has_epidemic?: boolean;
   last_survey_date?: string;
   notes?: string;
 }
@@ -72,6 +108,8 @@ export interface Village {
   village_moo: number;
   village_name: string;
   village_code?: string;
+  /** Sub-district name without the "ตำบล" prefix. Not yet sourced from HOSxP. */
+  tambon_name?: string;
   latitude?: number;
   longitude?: number;
   total_houses?: number;

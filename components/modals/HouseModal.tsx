@@ -81,7 +81,7 @@ export default function HouseModal({
 
   return (
     <div className="modal-backdrop animate-fade-in" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-content animate-scale-up" role="dialog" aria-modal="true">
+      <div className="modal-content modal-content-lg animate-scale-up" role="dialog" aria-modal="true">
         {/* Header */}
         <div className="modal-header">
           <div className="modal-title-row">

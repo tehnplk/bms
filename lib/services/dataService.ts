@@ -1,4 +1,4 @@
-import { AddonContext } from '../types/bms';
+﻿import { AddonContext } from '../types/bms';
 import { CatchmentStats, DEFAULT_MAP_CENTER, FilterOptions, HealthRiskCategory, House, Resident, Village } from '../types/gis';
 import { executeSql } from './bmsClient';
 
@@ -24,6 +24,7 @@ class DataService {
         village_moo: 1,
         village_name: 'บ้านหนองหอย',
         village_code: '65010101',
+        tambon_name: 'ในเมือง',
         latitude: 16.821500,
         longitude: 100.264200,
         total_houses: 6,
@@ -34,6 +35,7 @@ class DataService {
         village_moo: 2,
         village_name: 'บ้านสันติสุข',
         village_code: '65010102',
+        tambon_name: 'ในเมือง',
         latitude: 16.826200,
         longitude: 100.271000,
         total_houses: 4,
@@ -44,6 +46,7 @@ class DataService {
         village_moo: 3,
         village_name: 'บ้านดอนกลาง',
         village_code: '65010103',
+        tambon_name: 'ในเมือง',
         latitude: 16.815800,
         longitude: 100.258900,
         total_houses: 3,
@@ -54,6 +57,7 @@ class DataService {
         village_moo: 4,
         village_name: 'บ้านทุ่งพัฒนา',
         village_code: '65010104',
+        tambon_name: 'ในเมือง',
         latitude: 16.829000,
         longitude: 100.260500,
         total_houses: 2,
@@ -64,6 +68,7 @@ class DataService {
         village_moo: 5,
         village_name: 'บ้านคลองเตย',
         village_code: '65010105',
+        tambon_name: 'ในเมือง',
         latitude: 16.818000,
         longitude: 100.275000,
         total_houses: 2,

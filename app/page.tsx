@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 import { bootstrapAddon, updateHouseLocation } from '@/lib/services/bmsClient';
 import { dataService } from '@/lib/services/dataService';
 import { AddonContext } from '@/lib/types/bms';
-import { House, Village } from '@/lib/types/gis';
+import { HealthRiskCategory, House, Village } from '@/lib/types/gis';
+import { AppSettings, DEFAULT_SETTINGS, loadSettings } from '@/lib/services/settingsStore';
 import { BaseTileLayer } from '@/components/gis/MapView';
 import Navbar from '@/components/layout/Navbar';
 import RightPanel from '@/components/drawers/RightPanel';
@@ -37,6 +38,9 @@ export default function CatchmentGisPage() {
   const [villages, setVillages] = useState<Village[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
   const [selectedVillageId, setSelectedVillageId] = useState<number | 'all'>('all');
+  const [healthGroup, setHealthGroup] = useState<HealthRiskCategory | 'all'>('all');
+  // Configured on /setting and shared through localStorage
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [baseLayer, setBaseLayer] = useState<BaseTileLayer>('osm');
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,6 +65,8 @@ export default function CatchmentGisPage() {
 
   // Initial Bootstrap on Mount
   useEffect(() => {
+    setSettings(loadSettings());
+
     async function initApp() {
       try {
         const initialCtx = await bootstrapAddon();
@@ -73,11 +79,43 @@ export default function CatchmentGisPage() {
     initApp();
   }, [loadData]);
 
-  // Filter houses by village selection
+  // Re-classify houses against the criteria and case list configured on /setting
+  const classifiedHouses = useMemo(() => {
+    const { vulnerableCriteria, epidemicCases } = settings;
+    const epidemicHouseIds = new Set(epidemicCases.map((c) => c.house_id));
+
+    return houses.map((h) => {
+      const hasVulnerable = h.residents.some((r) =>
+        (r.age !== undefined && r.age >= vulnerableCriteria.elderlyAge) ||
+        (vulnerableCriteria.includeDisabled && !!r.is_disabled) ||
+        (vulnerableCriteria.includeBedridden && !!r.is_bedridden)
+      );
+      const hasEpidemic = epidemicHouseIds.has(h.house_id);
+      const isMapped = h.latitude !== null && h.longitude !== null;
+
+      let category: HealthRiskCategory = 'normal';
+      if (!isMapped) category = 'unmapped';
+      else if (hasEpidemic) category = 'epidemic';
+      else if (hasVulnerable) category = 'vulnerable';
+      else if (h.has_chronic) category = 'chronic';
+      else if (h.has_mch) category = 'mch';
+
+      return { ...h, has_vulnerable: hasVulnerable, has_epidemic: hasEpidemic, primary_health_category: category };
+    });
+  }, [houses, settings]);
+
+  // Filter houses by village and follow-up group selection
   const displayedHouses = useMemo(() => {
-    if (selectedVillageId === 'all') return houses;
-    return houses.filter((h) => h.village_id === selectedVillageId);
-  }, [houses, selectedVillageId]);
+    return classifiedHouses.filter((h) => {
+      if (selectedVillageId !== 'all' && h.village_id !== selectedVillageId) return false;
+      if (healthGroup === 'chronic' && !h.has_chronic) return false;
+      if (healthGroup === 'vulnerable' && !h.has_vulnerable) return false;
+      if (healthGroup === 'mch' && !h.has_mch) return false;
+      if (healthGroup === 'epidemic' && !h.has_epidemic) return false;
+      if (healthGroup === 'unmapped' && h.latitude !== null && h.longitude !== null) return false;
+      return true;
+    });
+  }, [classifiedHouses, selectedVillageId, healthGroup]);
 
   // Select house handler from Search Bar or Map Marker or Right Panel
   const handleSelectHouse = (house: House, openModal = false) => {
@@ -140,8 +178,8 @@ export default function CatchmentGisPage() {
         houses={houses}
         selectedVillageId={selectedVillageId}
         onVillageChange={(vId) => setSelectedVillageId(vId)}
-        baseLayer={baseLayer}
-        onBaseLayerChange={(l) => setBaseLayer(l)}
+        healthGroup={healthGroup}
+        onHealthGroupChange={(g) => setHealthGroup(g)}
         totalHouses={houses.length}
         onSelectHouse={(h) => handleSelectHouse(h, false)}
         isRightPanelOpen={isRightPanelOpen}
@@ -156,13 +194,14 @@ export default function CatchmentGisPage() {
             houses={displayedHouses}
             displayMode="point"
             baseLayer={baseLayer}
-            showHeatmap={false}
+            showHeatmap={settings.showHeatmap}
             isPickMode={false}
             pickingHouse={null}
             pickedLat={null}
             pickedLng={null}
             selectedHouseId={selectedHouse?.house_id}
             onHouseSelect={handleMarkerSelect}
+            onBaseLayerChange={(l) => setBaseLayer(l)}
           />
         </main>
 

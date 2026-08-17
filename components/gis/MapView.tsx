@@ -19,8 +19,15 @@ export interface MapViewProps {
   pickedLng?: number | null;
   selectedHouseId?: number | null;
   onHouseSelect: (house: House) => void;
+  onBaseLayerChange?: (layer: BaseTileLayer) => void;
   onCoordinatePicked?: (lat: number, lng: number) => void;
 }
+
+const BASE_LAYER_OPTIONS: Array<{ id: BaseTileLayer; label: string; title: string }> = [
+  { id: 'osm', label: 'แผนที่', title: 'แผนที่ถนนมาตรฐาน (OpenStreetMap)' },
+  { id: 'satellite', label: 'ดาวเทียม', title: 'ภาพถ่ายดาวเทียมความละเอียดสูง (Esri Satellite)' },
+  { id: 'dark', label: 'โหมดมืด', title: 'แผนที่โทนมืด (CartoDB Dark)' }
+];
 
 // Indigo, kept clear of every health-category marker colour
 const DRAW_COLOR = '#4f46e5';
@@ -63,6 +70,7 @@ function geodesicAreaSqm(points: Array<{ lat: number; lng: number }>): number {
 
 function getCategoryColor(category: HealthRiskCategory): string {
   switch (category) {
+    case 'epidemic': return '#be123c';
     case 'chronic': return '#ef4444';
     case 'vulnerable': return '#8b5cf6';
     case 'mch': return '#0ea5e9';
@@ -82,6 +90,7 @@ export default function MapView({
   pickedLng = null,
   selectedHouseId = null,
   onHouseSelect,
+  onBaseLayerChange,
   onCoordinatePicked
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +98,7 @@ export default function MapView({
   const currentTileLayerRef = useRef<any>(null);
   const vectorPointGroupRef = useRef<any>(null);
   const clusterGroupRef = useRef<any>(null);
+  const markerByHouseIdRef = useRef<Record<number, any>>({});
   const heatCircleGroupRef = useRef<any>(null);
   const activePinMarkerRef = useRef<any>(null);
   const hasAutoFittedRef = useRef(false);
@@ -349,6 +359,7 @@ export default function MapView({
         clusterGroupRef.current.clearLayers();
       }
 
+      markerByHouseIdRef.current = {};
       const validHouses = houses.filter(h => h.latitude !== null && h.longitude !== null);
 
       // Dynamically load leaflet.markercluster
@@ -452,6 +463,7 @@ export default function MapView({
         });
 
         clusterGroup.addLayer(marker);
+        markerByHouseIdRef.current[house.house_id] = marker;
 
         // Heat density circle
         if (showHeatmap && heatCircleGroupRef.current) {
@@ -481,14 +493,46 @@ export default function MapView({
     renderLayers();
   }, [isMapReady, houses, displayMode, showHeatmap, isPickMode, onHouseSelect]);
 
-  // 4. Fly to selected house
+  // 4. Fly to the selected house, then open its info popup on arrival
   useEffect(() => {
-    if (!mapInstanceRef.current || !selectedHouseId) return;
+    const map = mapInstanceRef.current;
+    if (!map || !selectedHouseId) return;
+
     const target = houses.find(h => h.house_id === selectedHouseId);
-    if (target && target.latitude !== null && target.longitude !== null) {
-      mapInstanceRef.current.flyTo([target.latitude, target.longitude], 17, { duration: 1.2 });
-    }
-  }, [selectedHouseId, houses]);
+    if (!target || target.latitude === null || target.longitude === null) return;
+
+    const revealPopup = () => {
+      // Looked up on arrival, not now: the marker layer may still be rendering
+      const marker = markerByHouseIdRef.current[selectedHouseId];
+      if (marker && map.hasLayer(marker)) {
+        marker.openPopup();
+        return;
+      }
+
+      // Marker still grouped in a cluster: show the same card anchored to the
+      // house rather than zooming further, which would push other markers away
+      const L = leafletRef.current;
+      if (!L) return;
+      L.popup({ className: 'custom-house-popup', maxWidth: 280 })
+        .setLatLng([target.latitude, target.longitude])
+        .setContent(createPopupContent(target))
+        .openOn(map);
+
+      document.getElementById(`popup-btn-${target.house_id}`)
+        ?.addEventListener('click', () => onHouseSelect(target));
+      document.getElementById(`popup-nav-${target.house_id}`)
+        ?.addEventListener('click', () => {
+          window.open(`https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}`, '_blank');
+        });
+    };
+
+    // Zoom 18 is where disableClusteringAtZoom splits every cluster, so the
+    // house gets its own marker while its neighbours all stay on the map
+    map.flyTo([target.latitude, target.longitude], 18, { duration: 1.2 });
+    map.once('moveend', revealPopup);
+
+    return () => map.off('moveend', revealPopup);
+  }, [selectedHouseId, houses, onHouseSelect]);
 
   // 5. Handle Pin Picking Marker
   useEffect(() => {
@@ -625,6 +669,25 @@ export default function MapView({
         </button>
       </div>
 
+      {/* Base layer switcher */}
+      {onBaseLayerChange && (
+        <div className="map-tile-switch">
+          <div className="tile-toggle-group">
+            {BASE_LAYER_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`tile-toggle-btn ${baseLayer === opt.id ? 'active' : ''}`}
+                onClick={() => onBaseLayerChange(opt.id)}
+                title={opt.title}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {activeHint && (
         <div className="map-tool-hint">
           {activeHint} · กด <kbd>Esc</kbd> เพื่อยกเลิก
@@ -632,7 +695,7 @@ export default function MapView({
       )}
 
       <div id="map-coord-hud" className="map-coord-hud">
-        พิกัดเคอร์เซอร์: Lat {cursorCoord.lat.toFixed(6)}, Lng {cursorCoord.lng.toFixed(6)}
+        {cursorCoord.lat.toFixed(6)}, {cursorCoord.lng.toFixed(6)}
       </div>
     </div>
   );

@@ -1,23 +1,33 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { House, Village } from '@/lib/types/gis';
+import Link from 'next/link';
+import { HealthRiskCategory, House, Village } from '@/lib/types/gis';
 import { AddonContext } from '@/lib/types/bms';
-import { BaseTileLayer } from '@/components/gis/MapView';
 import { dataService, SearchResultItem } from '@/lib/services/dataService';
 import {
   Map,
   Building2,
-  Search, 
-  X, 
-  Home, 
-  User, 
+  Search,
+  X,
+  Home,
+  HeartPulse,
+  User,
   MapPin, 
-  PanelRight, 
-  PanelRightClose,
+  Wrench,
+  Settings,
   ChevronRight,
   AlertTriangle
 } from 'lucide-react';
+
+const HEALTH_GROUP_OPTIONS: Array<{ id: HealthRiskCategory | 'all'; label: string }> = [
+  { id: 'all', label: '🩺 ทุกกลุ่มติดตาม' },
+  { id: 'chronic', label: 'ผู้ป่วยโรคเรื้อรัง (NCDs)' },
+  { id: 'vulnerable', label: 'กลุ่มเปราะบาง / ติดเตียง / ผู้พิการ' },
+  { id: 'mch', label: 'หญิงตั้งครรภ์ & ทารกแรกเกิด' },
+  { id: 'epidemic', label: 'กลุ่มระบาดวิทยาและควบคุมโรค' },
+  { id: 'unmapped', label: 'บ้านที่ยังไม่มีพิกัด' }
+];
 
 export interface NavbarProps {
   ctx: AddonContext;
@@ -25,8 +35,8 @@ export interface NavbarProps {
   houses: House[];
   selectedVillageId: number | 'all';
   onVillageChange: (villageId: number | 'all') => void;
-  baseLayer: BaseTileLayer;
-  onBaseLayerChange: (layer: BaseTileLayer) => void;
+  healthGroup: HealthRiskCategory | 'all';
+  onHealthGroupChange: (group: HealthRiskCategory | 'all') => void;
   totalHouses: number;
   onSelectHouse: (house: House) => void;
   isRightPanelOpen: boolean;
@@ -39,8 +49,8 @@ export default function Navbar({
   houses,
   selectedVillageId,
   onVillageChange,
-  baseLayer,
-  onBaseLayerChange,
+  healthGroup,
+  onHealthGroupChange,
   totalHouses,
   onSelectHouse,
   isRightPanelOpen,
@@ -136,9 +146,25 @@ export default function Navbar({
         </div>
       </div>
 
-      {/* Center Controls: Village Selector & Resident/Address Search */}
+      {/* Center Controls: Follow-up Group, Village Selector & Resident/Address Search */}
       <div className="navbar-controls">
-        {/* 1. Village Selector Dropdown */}
+        {/* 1. Follow-up group filter (applies to the map, not just the panel list) */}
+        <div className="village-select-box health-group-box">
+          <HeartPulse size={15} className="select-icon" />
+          <select
+            id="navbar-health-group-select"
+            className="navbar-select"
+            value={healthGroup}
+            onChange={(e) => onHealthGroupChange(e.target.value as HealthRiskCategory | 'all')}
+            title="กรองหมุดบนแผนที่ตามกลุ่มติดตาม"
+          >
+            {HEALTH_GROUP_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 2. Village Selector Dropdown */}
         <div className="village-select-box">
           <Building2 size={15} className="select-icon" />
           <select
@@ -159,7 +185,7 @@ export default function Navbar({
           </select>
         </div>
 
-        {/* 2. Live Search Bar: person -> house -> village */}
+        {/* 3. Live Search Bar: person -> house -> village */}
         <div className="navbar-search-box" ref={searchContainerRef}>
           <div className="search-input-wrapper">
             <Search size={15} className="search-input-icon" />
@@ -190,7 +216,6 @@ export default function Navbar({
                 <X size={14} />
               </button>
             )}
-            <kbd className="search-kbd-hint">Ctrl K</kbd>
           </div>
 
           {/* Autocomplete Search Dropdown */}
@@ -284,43 +309,21 @@ export default function Navbar({
 
       {/* Right Controls: Hospital Badge, Tile Switcher, Right Panel Toggle & Refresh */}
       <div className="navbar-actions">
-        {/* Tile Layer Switcher */}
-        <div className="tile-toggle-group">
-          <button
-            type="button"
-            className={`tile-toggle-btn ${baseLayer === 'osm' ? 'active' : ''}`}
-            onClick={() => onBaseLayerChange('osm')}
-            title="แผนที่ถนนมาตรฐาน (OpenStreetMap)"
-          >
-            แผนที่
-          </button>
-          <button
-            type="button"
-            className={`tile-toggle-btn ${baseLayer === 'satellite' ? 'active' : ''}`}
-            onClick={() => onBaseLayerChange('satellite')}
-            title="ภาพถ่ายดาวเทียมความละเอียดสูง (Esri Satellite)"
-          >
-            ดาวเทียม
-          </button>
-          <button
-            type="button"
-            className={`tile-toggle-btn ${baseLayer === 'dark' ? 'active' : ''}`}
-            onClick={() => onBaseLayerChange('dark')}
-            title="แผนที่โทนมืด (CartoDB Dark)"
-          >
-            โหมดมืด
-          </button>
-        </div>
+        {/* Settings Page Link */}
+        <Link href="/setting" className="navbar-icon-btn panel-toggle-btn" title="ตั้งค่ากลุ่มเปราะบาง และกลุ่มระบาดวิทยา">
+          <Settings size={17} />
+          <span className="btn-label-responsive">ตั้งค่า</span>
+        </Link>
 
         {/* Right Panel Toggle Button (Explain / Collapse) */}
         <button
           type="button"
           className={`navbar-icon-btn panel-toggle-btn ${isRightPanelOpen ? 'active' : ''}`}
           onClick={onToggleRightPanel}
-          title={isRightPanelOpen ? 'ย่อ/ปิดแผงข้อมูลด้านขวา' : 'ขยาย/เปิดแผงข้อมูลและคำอธิบายโครงสร้าง (person -> house -> village)'}
+          title={isRightPanelOpen ? 'ย่อ/ปิดแผงเครื่องมือด้านขวา' : 'ขยาย/เปิดแผงเครื่องมือ'}
         >
-          {isRightPanelOpen ? <PanelRightClose size={17} /> : <PanelRight size={17} />}
-          <span className="btn-label-responsive">แผงข้อมูล</span>
+          <Wrench size={17} />
+          <span className="btn-label-responsive">เครื่องมือ</span>
         </button>
 
       </div>

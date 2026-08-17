@@ -66,6 +66,13 @@ export default function RightPanel({
     return dataService.calculateStats(displayedHouses, villages);
   }, [displayedHouses, villages]);
 
+  const selectedVillage = selectedVillageId === 'all'
+    ? null
+    : villages.find(v => v.village_id === selectedVillageId);
+
+  // Every village in a catchment shares one sub-district, so fall back to the first
+  const tambonName = selectedVillage?.tambon_name || villages[0]?.tambon_name;
+
   // Filtered houses for list tab
   const filteredList = useMemo(() => {
     return displayedHouses.filter(h => {
@@ -131,10 +138,12 @@ export default function RightPanel({
           <div className="header-title-group">
             <BarChart3 size={18} className="text-primary" />
             <div>
-              <h2 className="panel-title">Catchment GIS Explorer</h2>
-              <p className="panel-subtitle">
-                {selectedVillageId === 'all' ? 'ภาพรวมทุกหมู่บ้านในเขต' : `หมู่บ้าน ${villages.find(v => v.village_id === selectedVillageId)?.village_name || ''}`}
-              </p>
+              <h2 className="panel-title">
+                {selectedVillage
+                  ? `หมู่ที่ ${selectedVillage.village_moo} ${selectedVillage.village_name}`
+                  : `ทุกหมู่บ้านในเขต (${villages.length} หมู่)`}
+              </h2>
+              {tambonName && <p className="panel-subtitle">ตำบล{tambonName}</p>}
             </div>
           </div>
           <button
