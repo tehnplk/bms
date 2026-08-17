@@ -81,6 +81,16 @@ export default function CatchmentGisPage() {
 
   // Select house handler from Search Bar or Map Marker or Right Panel
   const handleSelectHouse = (house: House, openModal = false) => {
+    // A house found by server-side search may not be part of the loaded set yet
+    setHouses((prev) =>
+      prev.some((h) => h.house_id === house.house_id) ? prev : [...prev, house]
+    );
+
+    // Otherwise the village filter would hide the house the user just picked
+    if (selectedVillageId !== 'all' && house.village_id !== selectedVillageId) {
+      setSelectedVillageId('all');
+    }
+
     setSelectedHouse(house);
     if (openModal || (house.latitude === null && house.longitude === null)) {
       setIsModalOpen(true);
@@ -94,9 +104,15 @@ export default function CatchmentGisPage() {
       if (res.success) {
         dataService.updateLocalCoordinate(houseId, lat, lng);
         const updatedHouses = await dataService.getHouses(ctx);
-        setHouses([...updatedHouses]);
+        // Keep houses that only exist in state because server-side search pulled them in
+        setHouses((prev) => {
+          const extras = prev
+            .filter((p) => !updatedHouses.some((u) => u.house_id === p.house_id))
+            .map((p) => (p.house_id === houseId ? dataService.applyCoordinate(p, lat, lng) : p));
+          return [...updatedHouses, ...extras];
+        });
         if (selectedHouse && selectedHouse.house_id === houseId) {
-          setSelectedHouse({ ...selectedHouse, latitude: lat, longitude: lng });
+          setSelectedHouse(dataService.applyCoordinate(selectedHouse, lat, lng));
         }
         showToast(res.message || 'บันทึกพิกัดบ้านลง HOSxP เรียบร้อยแล้ว', 'success');
       } else {
@@ -114,8 +130,8 @@ export default function CatchmentGisPage() {
       <Navbar
         hospitalName={ctx.session?.hospitalName || 'BMS Dev Portal Hospital'}
         hospitalCode={ctx.session?.hospitalCode || 'DEV99'}
+        ctx={ctx}
         villages={villages}
-        houses={houses}
         selectedVillageId={selectedVillageId}
         onVillageChange={(vId) => setSelectedVillageId(vId)}
         baseLayer={baseLayer}

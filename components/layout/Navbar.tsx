@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { House, Village } from '@/lib/types/gis';
+import { AddonContext } from '@/lib/types/bms';
 import { BaseTileLayer } from '@/components/gis/MapView';
 import { dataService, SearchResultItem } from '@/lib/services/dataService';
 import { 
@@ -22,8 +23,8 @@ import {
 export interface NavbarProps {
   hospitalName?: string;
   hospitalCode?: string;
+  ctx: AddonContext;
   villages: Village[];
-  houses: House[];
   selectedVillageId: number | 'all';
   onVillageChange: (villageId: number | 'all') => void;
   baseLayer: BaseTileLayer;
@@ -38,8 +39,8 @@ export interface NavbarProps {
 export default function Navbar({
   hospitalName = 'BMS Dev Portal Hospital',
   hospitalCode = 'DEV99',
+  ctx,
   villages,
-  houses,
   selectedVillageId,
   onVillageChange,
   baseLayer,
@@ -55,11 +56,32 @@ export default function Navbar({
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Search Results using person -> house -> village relationship
-  const searchResults: SearchResultItem[] = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    return dataService.searchHousesAndResidents(searchQuery, houses).slice(0, 15);
-  }, [searchQuery, houses]);
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Search Results using person -> house -> village relationship, queried straight
+  // from the HOSxP database so results are not limited to the houses already on the map
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await dataService.searchRemote(ctx, searchQuery);
+      if (cancelled) return;
+      setSearchResults(results.slice(0, 15));
+      setIsSearching(false);
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, ctx]);
 
   // Click outside listener to close search dropdown
   useEffect(() => {
@@ -171,7 +193,7 @@ export default function Navbar({
           {isSearchOpen && searchQuery.trim() !== '' && (
             <div className="search-dropdown-menu animate-scale-up">
               <div className="search-dropdown-header">
-                <span>ผลการค้นหา ({searchResults.length} รายการ)</span>
+                <span>{isSearching ? 'กำลังค้นหา...' : `ผลการค้นหา (${searchResults.length} รายการ)`}</span>
                 <span className="search-rel-hint">person ➔ house ➔ village</span>
               </div>
 
@@ -245,12 +267,12 @@ export default function Navbar({
                     );
                   })}
                 </div>
-              ) : (
+              ) : !isSearching ? (
                 <div className="search-empty-state">
                   <p>ไม่พบข้อมูลบ้าน หรือ ผู้อยู่อาศัยที่ตรงกับ <strong>&ldquo;{searchQuery}&rdquo;</strong></p>
                   <span className="search-empty-hint">ลองค้นหาด้วย: บ้านเลขที่, ชื่อ, นามสกุล หรือ เลข HN</span>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>

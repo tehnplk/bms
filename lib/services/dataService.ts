@@ -456,6 +456,139 @@ class DataService {
   }
 
   /**
+   * Map a row of the physical HOSxP 'house' table (joined with 'village') to a House
+   */
+  private mapHouseRow(row: any): House {
+    const lat = row.latitude ? parseFloat(row.latitude) : null;
+    const lng = row.longitude ? parseFloat(row.longitude) : null;
+    const isValidCoord = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && lat > 0 && lng > 0;
+
+    return {
+      house_id: Number(row.house_id),
+      village_id: Number(row.village_id),
+      village_moo: Number(row.village_moo || 1),
+      village_name: row.village_name || `หมู่ ${row.village_moo || 1}`,
+      address: row.address || '-',
+      road: row.road || '',
+      census_id: row.census_id || '',
+      latitude: isValidCoord ? lat : null,
+      longitude: isValidCoord ? lng : null,
+      residents: [],
+      primary_health_category: isValidCoord ? 'normal' : 'unmapped',
+      has_chronic: false,
+      has_vulnerable: false,
+      has_mch: false
+    };
+  }
+
+  /**
+   * Search houses straight in the HOSxP database, so results are not limited to the
+   * page of houses already loaded on the map. Falls back to the in-memory dataset
+   * in mock mode or when the query fails.
+   */
+  async searchRemote(ctx: AddonContext, query: string): Promise<SearchResultItem[]> {
+    const q = query.trim();
+    if (!q) return [];
+    if (!ctx.session || ctx.isMock) return this.searchHousesAndResidents(q, this.localHouses);
+
+    const lowerQ = q.toLowerCase();
+    const like = { value: `%${q}%`, value_type: 'string' as const };
+    const results: SearchResultItem[] = [];
+    const seenHouseIds = new Set<number>();
+
+    try {
+      // 1. person -> house -> village (name, surname, full name, HN)
+      const personSql = `
+        SELECT
+          p.person_id, p.patient_hn AS hn, p.pname, p.fname, p.lname, p.sex,
+          p.house_regist_type_id,
+          h.house_id, h.village_id, v.village_moo, v.village_name,
+          h.address, h.road, h.census_id, h.latitude, h.longitude
+        FROM person p
+        INNER JOIN house h ON p.house_id = h.house_id
+        LEFT JOIN village v ON h.village_id = v.village_id
+        WHERE p.fname LIKE :q_fname
+           OR p.lname LIKE :q_lname
+           OR CONCAT(p.fname, ' ', p.lname) LIKE :q_full
+           OR p.patient_hn LIKE :q_hn
+        ORDER BY p.fname ASC, p.lname ASC
+        LIMIT 30
+      `;
+      const personRes = await executeSql(ctx, personSql, {
+        q_fname: like,
+        q_lname: like,
+        q_full: like,
+        q_hn: like
+      });
+
+      (personRes.data || []).forEach((row: any) => {
+        const houseId = Number(row.house_id);
+        if (seenHouseIds.has(houseId)) return;
+
+        const house = this.mapHouseRow(row);
+        const resident: Resident = {
+          person_id: Number(row.person_id),
+          house_id: houseId,
+          hn: row.hn || undefined,
+          pname: row.pname || '',
+          fname: row.fname || '',
+          lname: row.lname || '',
+          sex: row.sex || '1',
+          house_regist_type_id: row.house_regist_type_id ? Number(row.house_regist_type_id) : undefined
+        };
+        house.residents = [resident];
+        const fullName = `${resident.pname}${resident.fname} ${resident.lname}`.trim();
+        if (resident.house_regist_type_id === 1) {
+          house.head_person_id = resident.person_id;
+          house.head_person_name = fullName;
+        }
+
+        // The row matched on HN only when the name itself does not contain the query
+        const nameHit = `${resident.fname} ${resident.lname}`.toLowerCase().includes(lowerQ);
+        results.push({
+          house,
+          matchedType: nameHit ? 'resident' : 'hn',
+          matchedResident: resident,
+          matchText: nameHit ? fullName : `HN: ${resident.hn} (${fullName})`
+        });
+        seenHouseIds.add(houseId);
+      });
+
+      // 2. house (บ้านเลขที่ / รหัสบ้าน census_id)
+      const houseSql = `
+        SELECT
+          h.house_id, h.village_id, v.village_moo, v.village_name,
+          h.address, h.road, h.census_id, h.latitude, h.longitude
+        FROM house h
+        LEFT JOIN village v ON h.village_id = v.village_id
+        WHERE h.address LIKE :q_addr OR h.census_id LIKE :q_census
+        ORDER BY h.house_id ASC
+        LIMIT 30
+      `;
+      const houseRes = await executeSql(ctx, houseSql, { q_addr: like, q_census: like });
+
+      (houseRes.data || []).forEach((row: any) => {
+        const houseId = Number(row.house_id);
+        if (seenHouseIds.has(houseId)) return;
+
+        const house = this.mapHouseRow(row);
+        const addrHit = house.address.toLowerCase().includes(lowerQ);
+        results.push({
+          house,
+          matchedType: addrHit ? 'address' : 'census_id',
+          matchText: addrHit ? `บ้านเลขที่ ${house.address}` : `รหัสบ้าน: ${house.census_id}`
+        });
+        seenHouseIds.add(houseId);
+      });
+
+      return results;
+    } catch (err) {
+      console.warn('Remote search failed, falling back to loaded dataset:', err);
+      return this.searchHousesAndResidents(q, this.localHouses);
+    }
+  }
+
+  /**
    * Fetch all villages in catchment area directly from HOSxP database
    */
   async getVillages(ctx: AddonContext): Promise<Village[]> {
@@ -531,28 +664,7 @@ class DataService {
       const houseRes = await executeSql(ctx, houseSql, params);
 
       if (houseRes.data && houseRes.data.length > 0) {
-        const houses: House[] = houseRes.data.map((row: any) => {
-          const lat = row.latitude ? parseFloat(row.latitude) : null;
-          const lng = row.longitude ? parseFloat(row.longitude) : null;
-          const isValidCoord = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && lat > 0 && lng > 0;
-
-          return {
-            house_id: Number(row.house_id),
-            village_id: Number(row.village_id),
-            village_moo: Number(row.village_moo || 1),
-            village_name: row.village_name || `หมู่ ${row.village_moo || 1}`,
-            address: row.address || '-',
-            road: row.road || '',
-            census_id: row.census_id || '',
-            latitude: isValidCoord ? lat : null,
-            longitude: isValidCoord ? lng : null,
-            residents: [],
-            primary_health_category: isValidCoord ? 'normal' : 'unmapped',
-            has_chronic: false,
-            has_vulnerable: false,
-            has_mch: false
-          };
-        });
+        const houses: House[] = houseRes.data.map((row: any) => this.mapHouseRow(row));
 
         // 2. Fetch residents for these houses (best effort)
         try {
@@ -617,19 +729,24 @@ class DataService {
   }
 
   /**
+   * Return a copy of the house with a saved coordinate applied (and its marker category refreshed)
+   */
+  applyCoordinate(house: House, lat: number, lng: number): House {
+    let cat: HealthRiskCategory = 'normal';
+    if (house.has_vulnerable) cat = 'vulnerable';
+    else if (house.has_chronic) cat = 'chronic';
+    else if (house.has_mch) cat = 'mch';
+
+    return { ...house, latitude: lat, longitude: lng, primary_health_category: cat };
+  }
+
+  /**
    * Update house coordinate locally
    */
   updateLocalCoordinate(houseId: number, lat: number, lng: number) {
     const house = this.localHouses.find(h => h.house_id === houseId);
     if (house) {
-      house.latitude = lat;
-      house.longitude = lng;
-      if (house.primary_health_category === 'unmapped') {
-        if (house.has_vulnerable) house.primary_health_category = 'vulnerable';
-        else if (house.has_chronic) house.primary_health_category = 'chronic';
-        else if (house.has_mch) house.primary_health_category = 'mch';
-        else house.primary_health_category = 'normal';
-      }
+      Object.assign(house, this.applyCoordinate(house, lat, lng));
     }
   }
 
