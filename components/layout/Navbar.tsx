@@ -1,0 +1,321 @@
+'use client';
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { House, Village } from '@/lib/types/gis';
+import { BaseTileLayer } from '@/components/gis/MapView';
+import { dataService, SearchResultItem } from '@/lib/services/dataService';
+import { 
+  Map, 
+  RefreshCw, 
+  Building2, 
+  Search, 
+  X, 
+  Home, 
+  User, 
+  MapPin, 
+  PanelRight, 
+  PanelRightClose,
+  ChevronRight,
+  AlertTriangle
+} from 'lucide-react';
+
+export interface NavbarProps {
+  hospitalName?: string;
+  hospitalCode?: string;
+  villages: Village[];
+  houses: House[];
+  selectedVillageId: number | 'all';
+  onVillageChange: (villageId: number | 'all') => void;
+  baseLayer: BaseTileLayer;
+  onBaseLayerChange: (layer: BaseTileLayer) => void;
+  totalHouses: number;
+  onSelectHouse: (house: House) => void;
+  isRightPanelOpen: boolean;
+  onToggleRightPanel: () => void;
+  onRefresh?: () => void;
+}
+
+export default function Navbar({
+  hospitalName = 'BMS Dev Portal Hospital',
+  hospitalCode = 'DEV99',
+  villages,
+  houses,
+  selectedVillageId,
+  onVillageChange,
+  baseLayer,
+  onBaseLayerChange,
+  totalHouses,
+  onSelectHouse,
+  isRightPanelOpen,
+  onToggleRightPanel,
+  onRefresh
+}: NavbarProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Search Results using person -> house -> village relationship
+  const searchResults: SearchResultItem[] = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return dataService.searchHousesAndResidents(searchQuery, houses).slice(0, 15);
+  }, [searchQuery, houses]);
+
+  // Click outside listener to close search dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Keyboard shortcut (Ctrl+K or Cmd+K) to focus search
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        searchInputRef.current?.blur();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleSelectResult = (house: House) => {
+    onSelectHouse(house);
+    setIsSearchOpen(false);
+    // Keep search query or clear based on preference
+  };
+
+  return (
+    <header className="navbar-container">
+      {/* Brand & App Title */}
+      <div className="navbar-brand">
+        <div className="brand-logo-circle">
+          <Map size={20} style={{ color: '#0284c7' }} />
+        </div>
+        <div className="brand-text">
+          <div className="brand-title">HOSxP Catchment GIS</div>
+          <div className="brand-subtitle">ระบบแผนที่พิกัดบ้านในเขตรับผิดชอบ</div>
+        </div>
+      </div>
+
+      {/* Center Controls: Village Selector & Resident/Address Search */}
+      <div className="navbar-controls">
+        {/* 1. Village Selector Dropdown */}
+        <div className="village-select-box">
+          <Building2 size={15} className="select-icon" />
+          <select
+            id="navbar-village-select"
+            className="navbar-select"
+            value={selectedVillageId}
+            onChange={(e) => {
+              const val = e.target.value;
+              onVillageChange(val === 'all' ? 'all' : Number(val));
+            }}
+          >
+            <option value="all">📍 ทุกหมู่บ้าน ({totalHouses} หลัง)</option>
+            {villages.map((v) => (
+              <option key={v.village_id} value={v.village_id}>
+                หมู่ {v.village_moo} {v.village_name} {v.total_houses ? `(${v.total_houses} หลัง)` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 2. Live Search Bar: person -> house -> village */}
+        <div className="navbar-search-box" ref={searchContainerRef}>
+          <div className="search-input-wrapper">
+            <Search size={15} className="search-input-icon" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="navbar-search-input"
+              placeholder="ค้นหาชื่อผู้อยู่อาศัย หรือ บ้านเลขที่..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => {
+                if (searchQuery.trim()) setIsSearchOpen(true);
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+            <kbd className="search-kbd-hint">Ctrl K</kbd>
+          </div>
+
+          {/* Autocomplete Search Dropdown */}
+          {isSearchOpen && searchQuery.trim() !== '' && (
+            <div className="search-dropdown-menu animate-scale-up">
+              <div className="search-dropdown-header">
+                <span>ผลการค้นหา ({searchResults.length} รายการ)</span>
+                <span className="search-rel-hint">person ➔ house ➔ village</span>
+              </div>
+
+              {searchResults.length > 0 ? (
+                <div className="search-results-list">
+                  {searchResults.map((item) => {
+                    const house = item.house;
+                    const hasCoord = house.latitude !== null && house.longitude !== null;
+                    const isResidentMatch = item.matchedType === 'resident' || item.matchedType === 'hn';
+
+                    return (
+                      <div
+                        key={`${house.house_id}-${item.matchedResident?.person_id || 'h'}`}
+                        className="search-result-item"
+                        onClick={() => handleSelectResult(house)}
+                      >
+                        <div className="result-item-icon">
+                          {isResidentMatch ? (
+                            <User size={16} className="text-blue" />
+                          ) : (
+                            <Home size={16} className="text-emerald" />
+                          )}
+                        </div>
+
+                        <div className="result-item-info">
+                          <div className="result-main-line">
+                            <span className="result-house-num">
+                              บ้านเลขที่ {house.address}
+                            </span>
+                            <span className="result-village-name">
+                              หมู่ {house.village_moo} {house.village_name}
+                            </span>
+                          </div>
+
+                          {/* Resident details if matched or show head person */}
+                          <div className="result-sub-line">
+                            {isResidentMatch && item.matchedResident ? (
+                              <span className="result-matched-person">
+                                👤 {item.matchedResident.pname}{item.matchedResident.fname} {item.matchedResident.lname}
+                                {item.matchedResident.house_regist_type_id === 1 && (
+                                  <span className="badge-head-mini">เจ้าบ้าน</span>
+                                )}
+                                {item.matchedResident.hn && (
+                                  <span className="result-hn-tag">HN: {item.matchedResident.hn}</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="result-head-person">
+                                เจ้าบ้าน: {house.head_person_name || 'ไม่ระบุ'} ({house.residents.length} สมาชิก)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* GPS Coordinate Status Badge */}
+                        <div className="result-item-badge">
+                          {hasCoord ? (
+                            <span className="badge-coord-ok" title={`พิกัด: ${house.latitude?.toFixed(4)}, ${house.longitude?.toFixed(4)}`}>
+                              <MapPin size={12} />
+                              มีพิกัด
+                            </span>
+                          ) : (
+                            <span className="badge-coord-missing" title="ยังไม่มีพิกัดในตาราง house">
+                              <AlertTriangle size={12} />
+                              ไม่มีพิกัด
+                            </span>
+                          )}
+                          <ChevronRight size={14} className="result-arrow" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="search-empty-state">
+                  <p>ไม่พบข้อมูลบ้าน หรือ ผู้อยู่อาศัยที่ตรงกับ <strong>&ldquo;{searchQuery}&rdquo;</strong></p>
+                  <span className="search-empty-hint">ลองค้นหาด้วย: บ้านเลขที่, ชื่อ, นามสกุล หรือ เลข HN</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right Controls: Hospital Badge, Tile Switcher, Right Panel Toggle & Refresh */}
+      <div className="navbar-actions">
+        {/* Hospital Connection Badge */}
+        <div className="hospital-badge">
+          <span className="live-dot"></span>
+          <span className="hospital-name">{hospitalName}</span>
+          <span className="hospital-code">({hospitalCode})</span>
+        </div>
+
+        {/* Tile Layer Switcher */}
+        <div className="tile-toggle-group">
+          <button
+            type="button"
+            className={`tile-toggle-btn ${baseLayer === 'osm' ? 'active' : ''}`}
+            onClick={() => onBaseLayerChange('osm')}
+            title="แผนที่ถนนมาตรฐาน (OpenStreetMap)"
+          >
+            แผนที่
+          </button>
+          <button
+            type="button"
+            className={`tile-toggle-btn ${baseLayer === 'satellite' ? 'active' : ''}`}
+            onClick={() => onBaseLayerChange('satellite')}
+            title="ภาพถ่ายดาวเทียมความละเอียดสูง (Esri Satellite)"
+          >
+            ดาวเทียม
+          </button>
+          <button
+            type="button"
+            className={`tile-toggle-btn ${baseLayer === 'dark' ? 'active' : ''}`}
+            onClick={() => onBaseLayerChange('dark')}
+            title="แผนที่โทนมืด (CartoDB Dark)"
+          >
+            โหมดมืด
+          </button>
+        </div>
+
+        {/* Right Panel Toggle Button (Explain / Collapse) */}
+        <button
+          type="button"
+          className={`navbar-icon-btn panel-toggle-btn ${isRightPanelOpen ? 'active' : ''}`}
+          onClick={onToggleRightPanel}
+          title={isRightPanelOpen ? 'ย่อ/ปิดแผงข้อมูลด้านขวา' : 'ขยาย/เปิดแผงข้อมูลและคำอธิบายโครงสร้าง (person -> house -> village)'}
+        >
+          {isRightPanelOpen ? <PanelRightClose size={17} /> : <PanelRight size={17} />}
+          <span className="btn-label-responsive">แผงข้อมูล</span>
+        </button>
+
+        {/* Refresh Button */}
+        {onRefresh && (
+          <button
+            type="button"
+            className="navbar-icon-btn"
+            onClick={onRefresh}
+            title="คิวรี่ข้อมูลพิกัดล่าสุดจากตาราง house"
+          >
+            <RefreshCw size={16} />
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
