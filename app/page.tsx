@@ -65,12 +65,11 @@ export default function CatchmentGisPage() {
 
   // Initial Bootstrap on Mount
   useEffect(() => {
-    setSettings(loadSettings());
-
     async function initApp() {
       try {
         const initialCtx = await bootstrapAddon();
         setCtx(initialCtx);
+        setSettings(await loadSettings(initialCtx));
         await loadData(initialCtx);
       } catch (err) {
         console.error('App init error:', err);
@@ -81,15 +80,27 @@ export default function CatchmentGisPage() {
 
   // Re-classify houses against the criteria and case list configured on /setting
   const classifiedHouses = useMemo(() => {
-    const { vulnerableCriteria, epidemicCases } = settings;
-    const epidemicHouseIds = new Set(epidemicCases.map((c) => c.house_id));
+    const { vulnerableCriteria, groupLists } = settings;
+
+    // Only lists switched on for the map contribute members
+    const houseIdsOf = (group: 'vulnerable' | 'epidemic') =>
+      new Set(
+        groupLists
+          .filter((l) => l.group === group && l.activeOnMap)
+          .flatMap((l) => l.members.map((m) => m.house_id))
+      );
+    const vulnerableListHouseIds = houseIdsOf('vulnerable');
+    const epidemicHouseIds = houseIdsOf('epidemic');
 
     return houses.map((h) => {
-      const hasVulnerable = h.residents.some((r) =>
-        (r.age !== undefined && r.age >= vulnerableCriteria.elderlyAge) ||
-        (vulnerableCriteria.includeDisabled && !!r.is_disabled) ||
-        (vulnerableCriteria.includeBedridden && !!r.is_bedridden)
-      );
+      // Automatic classification, plus anyone enrolled in an active list
+      const hasVulnerable =
+        vulnerableListHouseIds.has(h.house_id) ||
+        h.residents.some((r) =>
+          (r.age !== undefined && r.age >= vulnerableCriteria.elderlyAge) ||
+          (vulnerableCriteria.includeDisabled && !!r.is_disabled) ||
+          (vulnerableCriteria.includeBedridden && !!r.is_bedridden)
+        );
       const hasEpidemic = epidemicHouseIds.has(h.house_id);
       const isMapped = h.latitude !== null && h.longitude !== null;
 

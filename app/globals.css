@@ -285,6 +285,29 @@ html, body {
   color: var(--text-main);
 }
 
+.setting-save-state {
+  margin-left: auto;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.setting-save-state.saving {
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+.setting-save-state.saved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.setting-save-state.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 .setting-body {
   max-width: 860px;
   margin: 0 auto;
@@ -292,6 +315,54 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.setting-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.setting-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.setting-tab-btn:hover {
+  background: #f1f5f9;
+  color: var(--text-main);
+}
+
+.setting-tab-btn.active {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.setting-tab-badge {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: #be123c;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
 }
 
 .setting-card {
@@ -381,6 +452,201 @@ html, body {
 .setting-input:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.setting-grid-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.setting-grid-toolbar h2 {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.setting-grid-toolbar p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.setting-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.setting-add-btn:hover {
+  background: var(--primary-dark);
+}
+
+.setting-grid-add-row td {
+  background: #f8fafc;
+}
+
+.setting-add-row-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 34px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.setting-add-row-btn:hover {
+  border-color: var(--primary);
+  border-style: solid;
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.setting-grid-name.naming {
+  border-color: var(--border-focus);
+  background: #ffffff;
+}
+
+.setting-grid-btn.primary {
+  height: 38px;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.setting-grid-btn.primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: #ffffff;
+}
+
+.setting-grid-btn.primary:disabled {
+  background: #cbd5e1;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.setting-grid-wrap {
+  overflow-x: auto;
+}
+
+.setting-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.setting-grid th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.setting-grid td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.setting-grid tr:last-child td {
+  border-bottom: none;
+}
+
+.setting-grid-empty {
+  text-align: center;
+  padding: 26px 10px;
+  color: var(--text-muted);
+}
+
+.setting-grid-name {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-main);
+  outline: none;
+}
+
+.setting-grid-name:hover {
+  border-color: var(--border-color);
+  background: #f8fafc;
+}
+
+.setting-grid-name:focus {
+  border-color: var(--border-focus);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.setting-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setting-grid-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.setting-grid-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.setting-grid-btn.danger {
+  padding: 0 9px;
+}
+
+.setting-grid-btn.danger:hover {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fef2f2;
 }
 
 .setting-field {

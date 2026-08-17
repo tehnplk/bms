@@ -35,27 +35,30 @@ export const DEFAULT_VULNERABLE_CRITERIA: VulnerableCriteria = {
   includeBedridden: true
 };
 
-/** One communicable-disease case registered against a person */
-export interface EpidemicCase {
+export type GroupKind = 'vulnerable' | 'epidemic';
+
+/** A person enrolled in a follow-up list */
+export interface GroupMember {
   person_id: number;
   house_id: number;
   person_name: string;
   hn?: string;
-  disease: string;
-  registered_date: string; // YYYY-MM-DD
+  house_address: string;
+  village_moo: number;
+  /** Epidemic lists only — the disease itself is carried by the list name */
+  treatment_start_date?: string;
 }
 
-export const EPIDEMIC_DISEASES = [
-  'ไข้เลือดออก',
-  'โควิด-19',
-  'ไข้หวัดใหญ่',
-  'มือ เท้า ปาก',
-  'อุจจาระร่วงเฉียบพลัน',
-  'วัณโรคปอด',
-  'เลปโตสไปโรซิส (ฉี่หนู)',
-  'ชิคุนกุนยา',
-  'หัด'
-];
+/** A named follow-up list inside one group */
+export interface GroupList {
+  id: string;
+  group: GroupKind;
+  name: string;
+  members: GroupMember[];
+  /** Whether this list's houses are highlighted on the map */
+  activeOnMap: boolean;
+  created_date: string;
+}
 
 export interface Resident {
   person_id: number;
