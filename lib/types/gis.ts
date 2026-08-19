@@ -37,7 +37,7 @@ export const DEFAULT_VULNERABLE_CRITERIA: VulnerableCriteria = {
 
 export type GroupKind = 'vulnerable' | 'epidemic' | 'partner' | 'resource';
 
-/** Person-based groups enrol people; place-based groups pin locations */
+/** Person-based layers enrol people; place-based layers pin locations */
 export type GroupMemberKind = 'person' | 'place';
 
 export const GROUP_MEMBER_KIND: Record<GroupKind, GroupMemberKind> = {
@@ -47,35 +47,64 @@ export const GROUP_MEMBER_KIND: Record<GroupKind, GroupMemberKind> = {
   resource: 'place'
 };
 
-export interface GroupMember {
-  /** Person members (vulnerable / epidemic) */
-  person_id?: number;
-  house_id?: number;
-  person_name?: string;
+export type LatLngTuple = [number, number];
+
+/**
+ * Where a feature sits on the map. 'home' has no coordinate of its own — it
+ * follows the linked person's house, so a corrected house pin moves it too.
+ */
+export type FeatureGeometry =
+  | { type: 'home' }
+  | { type: 'point'; lat: number; lng: number }
+  | { type: 'circle'; lat: number; lng: number; radius: number }
+  | { type: 'polygon'; path: LatLngTuple[] }
+  | { type: 'line'; path: LatLngTuple[]; weight: number };
+
+export type GeometryKind = FeatureGeometry['type'];
+
+/** The person a feature was created from, when it came out of a person search */
+export interface FeaturePerson {
+  person_id: number;
+  house_id: number;
   hn?: string;
   house_address?: string;
   village_moo?: number;
-  /** Epidemic lists only — the disease itself is carried by the list name */
+  /** Epidemic layers only — the disease itself is carried by the layer name */
   treatment_start_date?: string;
-
-  /** Place members (partner / resource) */
-  place_id?: string;
-  place_name?: string;
-  latitude?: number;
-  longitude?: number;
-  note?: string;
 }
 
-/** A named follow-up list inside one group */
-export interface GroupList {
+/** One entry inside a layer */
+export interface LayerFeature {
   id: string;
-  group: GroupKind;
   name: string;
-  members: GroupMember[];
-  /** Whether this list's houses are highlighted on the map */
-  activeOnMap: boolean;
-  created_date: string;
+  geometry: FeatureGeometry;
+  /** A single attribute the user names themselves, e.g. "ผู้ประสานงาน" = "สมชาย" */
+  attribute?: { key: string; value: string };
+  person?: FeaturePerson;
 }
+
+/** Default stroke width for line features, in pixels */
+export const DEFAULT_LINE_WEIGHT = 4;
+
+/** One map layer, created and named by the user */
+export interface LayerSetting {
+  id: string;
+  /** Decides whether features are people or places, and how the layer is drawn */
+  kind: GroupKind;
+  name: string;
+  /** Whether the layer is drawn on the map */
+  visible: boolean;
+  features: LayerFeature[];
+}
+
+/** The built-in layers. Their id matches the kind so settings saved before
+ *  layers were editable still resolve. */
+export const DEFAULT_LAYERS: LayerSetting[] = [
+  { id: 'vulnerable', kind: 'vulnerable', name: 'กลุ่มติดตามต่อเนื่อง', visible: true, features: [] },
+  { id: 'epidemic', kind: 'epidemic', name: 'กลุ่มระบาดวิทยาและควบคุมโรค', visible: true, features: [] },
+  { id: 'partner', kind: 'partner', name: 'ภาคีเครือข่าย', visible: true, features: [] },
+  { id: 'resource', kind: 'resource', name: 'ทรัพยากรสุขภาพ', visible: true, features: [] }
+];
 
 export interface Resident {
   person_id: number;

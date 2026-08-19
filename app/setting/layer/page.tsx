@@ -6,42 +6,19 @@ import { Ambulance, ArrowLeft, Handshake, LucideIcon, Plus, ShieldAlert, Trash2,
 import { bootstrapAddon } from '@/lib/services/bmsClient';
 import { AppSettings, DEFAULT_SETTINGS, loadSettings, saveSettings } from '@/lib/services/settingsStore';
 import { AddonContext } from '@/lib/types/bms';
-import { GroupKind, GroupList } from '@/lib/types/gis';
-import GroupMembersModal from '@/components/modals/GroupMembersModal';
+import { GroupKind, LayerSetting } from '@/lib/types/gis';
+import LayerFeaturesModal from '@/components/modals/LayerFeaturesModal';
 
-const GROUP_META: Record<GroupKind, { label: string; short: string; icon: LucideIcon; placeholder: string }> = {
-  vulnerable: {
-    label: 'กลุ่มติดตามต่อเนื่อง',
-    short: 'ติดตามต่อเนื่อง',
-    icon: Users,
-    placeholder: 'เช่น ผู้ป่วยติดเตียง หมู่ 1'
-  },
-  epidemic: {
-    label: 'กลุ่มระบาดวิทยาและควบคุมโรค',
-    short: 'ระบาดวิทยา',
-    icon: ShieldAlert,
-    placeholder: 'เช่น เฝ้าระวังไข้เลือดออก ส.ค. 69'
-  },
-  partner: {
-    label: 'ภาคีเครือข่าย',
-    short: 'ภาคีเครือข่าย',
-    icon: Handshake,
-    placeholder: 'เช่น วัดและโรงเรียนในเขต'
-  },
-  resource: {
-    label: 'ทรัพยากรสุขภาพ',
-    short: 'ทรัพยากรสุขภาพ',
-    icon: Ambulance,
-    placeholder: 'เช่น จุดบริการปฐมภูมิ, รถรับส่งผู้ป่วย'
-  }
+const GROUP_META: Record<GroupKind, { icon: LucideIcon; label: string }> = {
+  vulnerable: { icon: Users, label: 'บุคคล – กลุ่มติดตามต่อเนื่อง' },
+  epidemic: { icon: ShieldAlert, label: 'บุคคล – ระบาดวิทยา' },
+  partner: { icon: Handshake, label: 'สถานที่ – ภาคีเครือข่าย' },
+  resource: { icon: Ambulance, label: 'สถานที่ – ทรัพยากรสุขภาพ' }
 };
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+const KINDS = Object.keys(GROUP_META) as GroupKind[];
 
-export default function SettingPage() {
-  const [activeTab, setActiveTab] = useState<GroupKind>('vulnerable');
+export default function SettingLayerPage() {
   const [ctx, setCtx] = useState<AddonContext>({
     session: null,
     sessionId: undefined,
@@ -50,9 +27,10 @@ export default function SettingPage() {
     isMock: true
   });
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [openListId, setOpenListId] = useState<string | null>(null);
+  const [openLayerId, setOpenLayerId] = useState<string | null>(null);
   const [isNaming, setIsNaming] = useState(false);
-  const [newListName, setNewListName] = useState('');
+  const [newLayerName, setNewLayerName] = useState('');
+  const [newLayerKind, setNewLayerKind] = useState<GroupKind>('vulnerable');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
   const isHydrated = useRef(false);
@@ -70,7 +48,7 @@ export default function SettingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced write-back: typing a list name must not fire one PUT per keystroke
+  // Debounced write-back: typing a name must not fire one PUT per keystroke
   // (BMS User Storage allows 120 writes/minute)
   useEffect(() => {
     if (!isHydrated.current) return;
@@ -84,41 +62,42 @@ export default function SettingPage() {
     return () => clearTimeout(timer);
   }, [settings, ctx]);
 
-  const listsOfTab = settings.groupLists.filter((l) => l.group === activeTab);
-  const openList = settings.groupLists.find((l) => l.id === openListId) || null;
+  const openLayer = settings.layers.find((l) => l.id === openLayerId) || null;
 
-  const updateList = (id: string, patch: Partial<GroupList>) => {
+  const updateLayer = (id: string, patch: Partial<LayerSetting>) => {
     setSettings((prev) => ({
       ...prev,
-      groupLists: prev.groupLists.map((l) => (l.id === id ? { ...l, ...patch } : l))
+      layers: prev.layers.map((l) => (l.id === id ? { ...l, ...patch } : l))
     }));
   };
 
   const startNaming = () => {
-    setNewListName('');
+    setNewLayerName('');
+    setNewLayerKind('vulnerable');
     setIsNaming(true);
     setTimeout(() => nameInputRef.current?.focus(), 0);
   };
 
   const confirmCreate = () => {
-    const name = newListName.trim();
+    const name = newLayerName.trim();
     if (!name) return;
-    const newList: GroupList = {
-      id: `${activeTab}-${Date.now()}`,
-      group: activeTab,
+    const layer: LayerSetting = {
+      id: `layer-${Date.now()}`,
+      kind: newLayerKind,
       name,
-      members: [],
-      activeOnMap: true,
-      created_date: todayISO()
+      visible: true,
+      features: []
     };
-    setSettings((prev) => ({ ...prev, groupLists: [...prev.groupLists, newList] }));
+    setSettings((prev) => ({ ...prev, layers: [...prev.layers, layer] }));
     setIsNaming(false);
-    setNewListName('');
+    setNewLayerName('');
   };
 
-  const deleteList = (id: string) => {
-    setSettings((prev) => ({ ...prev, groupLists: prev.groupLists.filter((l) => l.id !== id) }));
-    if (openListId === id) setOpenListId(null);
+  const deleteLayer = (layer: LayerSetting) => {
+    // Deleting a layer takes all of its features with it
+    if (layer.features.length && !window.confirm(`ลบ "${layer.name}" พร้อมข้อมูล ${layer.features.length} รายการ?`)) return;
+    setSettings((prev) => ({ ...prev, layers: prev.layers.filter((l) => l.id !== layer.id) }));
+    if (openLayerId === layer.id) setOpenLayerId(null);
   };
 
   return (
@@ -128,7 +107,7 @@ export default function SettingPage() {
           <ArrowLeft size={16} />
           กลับไปแผนที่
         </Link>
-        <h1 className="setting-title">ตั้งค่า</h1>
+        <h1 className="setting-title">ตั้งค่าชั้นข้อมูล</h1>
 
         <span className={`setting-save-state ${saveState}`} title={saveMessage}>
           {saveState === 'saving' && 'กำลังบันทึก...'}
@@ -138,31 +117,11 @@ export default function SettingPage() {
       </header>
 
       <main className="setting-body">
-        <div className="setting-tabs">
-          {(Object.keys(GROUP_META) as GroupKind[]).map((kind) => {
-            const count = settings.groupLists.filter((l) => l.group === kind).length;
-            const Icon = GROUP_META[kind].icon;
-            return (
-              <button
-                key={kind}
-                type="button"
-                className={`setting-tab-btn ${activeTab === kind ? 'active' : ''}`}
-                onClick={() => setActiveTab(kind)}
-                title={GROUP_META[kind].label}
-              >
-                <Icon size={15} />
-                {GROUP_META[kind].short}
-                {count > 0 && <span className="setting-tab-badge">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-
         <section className="setting-card">
           <div className="setting-grid-toolbar">
             <div>
-              <h2>กลุ่มย่อยใน{GROUP_META[activeTab].label}</h2>
-              <p>เพิ่มชื่อกลุ่มย่อยก่อน แล้วค่อยเพิ่มสมาชิกเข้าไปในแต่ละกลุ่ม</p>
+              <h2>ชั้นข้อมูลบนแผนที่</h2>
+              <p>เพิ่ม ลบ หรือแก้ชื่อชั้นข้อมูลได้ ปิดสวิตช์แสดงผลเพื่อซ่อนทั้งชั้นออกจากแผนที่</p>
             </div>
           </div>
 
@@ -171,40 +130,45 @@ export default function SettingPage() {
               <thead>
                 <tr>
                   <th style={{ width: 60 }}>ลำดับ</th>
-                  <th>ชื่อรายการ</th>
-                  <th style={{ width: 110 }}>จำนวนสมาชิก</th>
-                  <th style={{ width: 110 }}>ใช้งานแผนที่</th>
+                  <th>ชื่อชั้นข้อมูล</th>
+                  <th style={{ width: 110 }}>จำนวนข้อมูล</th>
+                  <th style={{ width: 90 }}>แสดงผล</th>
                   <th style={{ width: 150 }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {listsOfTab.length === 0 && !isNaming && (
+                {settings.layers.length === 0 && !isNaming && (
                   <tr>
                     <td colSpan={5} className="setting-grid-empty">
-                      ยังไม่มีกลุ่มย่อยใน{GROUP_META[activeTab].label} — กดปุ่ม + ด้านล่างเพื่อเพิ่ม
+                      ยังไม่มีชั้นข้อมูล — กดปุ่มเพิ่มชั้นข้อมูลด้านล่าง
                     </td>
                   </tr>
                 )}
-                {listsOfTab.map((list, i) => (
-                    <tr key={list.id}>
+                {settings.layers.map((layer, i) => {
+                  const Icon = GROUP_META[layer.kind].icon;
+                  return (
+                    <tr key={layer.id}>
                       <td className="font-mono">{i + 1}</td>
                       <td>
-                        <input
-                          type="text"
-                          className="setting-grid-name"
-                          value={list.name}
-                          onChange={(e) => updateList(list.id, { name: e.target.value })}
-                          aria-label="ชื่อรายการ"
-                        />
+                        <div className="setting-layer-name">
+                          <Icon size={15} aria-label={GROUP_META[layer.kind].label} />
+                          <input
+                            type="text"
+                            className="setting-grid-name"
+                            value={layer.name}
+                            onChange={(e) => updateLayer(layer.id, { name: e.target.value })}
+                            aria-label="ชื่อชั้นข้อมูล"
+                          />
+                        </div>
                       </td>
-                      <td className="font-mono">{list.members.length}</td>
+                      <td className="font-mono">{layer.features.length}</td>
                       <td>
                         <input
                           type="checkbox"
                           className="setting-switch"
-                          checked={list.activeOnMap}
-                          onChange={(e) => updateList(list.id, { activeOnMap: e.target.checked })}
-                          aria-label="ใช้งานแผนที่"
+                          checked={layer.visible}
+                          onChange={(e) => updateLayer(layer.id, { visible: e.target.checked })}
+                          aria-label="แสดงผล"
                         />
                       </td>
                       <td>
@@ -212,46 +176,61 @@ export default function SettingPage() {
                           <button
                             type="button"
                             className="setting-grid-btn"
-                            onClick={() => setOpenListId(list.id)}
+                            onClick={() => setOpenLayerId(layer.id)}
                           >
-                            สมาชิก
+                            <Plus size={13} />
+                            เพิ่มข้อมูล
                           </button>
                           <button
                             type="button"
                             className="setting-grid-btn danger"
-                            onClick={() => deleteList(list.id)}
-                            aria-label="ลบรายการ"
+                            onClick={() => deleteLayer(layer)}
+                            aria-label="ลบชั้นข้อมูล"
                           >
                             <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
 
-                {/* Last row: add a sub-group in place */}
+                {/* Last row: add a layer in place */}
                 <tr className="setting-grid-add-row">
                   {isNaming ? (
                     <>
-                      <td className="font-mono">{listsOfTab.length + 1}</td>
+                      <td className="font-mono">{settings.layers.length + 1}</td>
                       <td>
-                        <input
-                          id="new-list-name"
-                          ref={nameInputRef}
-                          type="text"
-                          className="setting-grid-name naming"
-                          placeholder={GROUP_META[activeTab].placeholder}
-                          value={newListName}
-                          onChange={(e) => setNewListName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') confirmCreate();
-                            if (e.key === 'Escape') setIsNaming(false);
-                          }}
-                        />
+                        <div className="setting-layer-name">
+                          <select
+                            className="setting-grid-select"
+                            value={newLayerKind}
+                            onChange={(e) => setNewLayerKind(e.target.value as GroupKind)}
+                            aria-label="ประเภทชั้นข้อมูล"
+                          >
+                            {KINDS.map((kind) => (
+                              <option key={kind} value={kind}>
+                                {GROUP_META[kind].label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            ref={nameInputRef}
+                            type="text"
+                            className="setting-grid-name naming"
+                            placeholder="ชื่อชั้นข้อมูลใหม่"
+                            value={newLayerName}
+                            onChange={(e) => setNewLayerName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') confirmCreate();
+                              if (e.key === 'Escape') setIsNaming(false);
+                            }}
+                          />
+                        </div>
                       </td>
                       <td className="font-mono">0</td>
                       <td>
-                        <input type="checkbox" className="setting-switch" checked readOnly aria-label="ใช้งานแผนที่" />
+                        <input type="checkbox" className="setting-switch" checked readOnly aria-label="แสดงผล" />
                       </td>
                       <td>
                         <div className="setting-grid-actions">
@@ -259,7 +238,7 @@ export default function SettingPage() {
                             type="button"
                             className="setting-grid-btn primary"
                             onClick={confirmCreate}
-                            disabled={!newListName.trim()}
+                            disabled={!newLayerName.trim()}
                           >
                             สร้าง
                           </button>
@@ -273,7 +252,7 @@ export default function SettingPage() {
                     <td colSpan={5}>
                       <button type="button" className="setting-add-row-btn" onClick={startNaming}>
                         <Plus size={15} />
-                        เพิ่มกลุ่มย่อย
+                        เพิ่มชั้นข้อมูล
                       </button>
                     </td>
                   )}
@@ -284,12 +263,12 @@ export default function SettingPage() {
         </section>
       </main>
 
-      {openList && (
-        <GroupMembersModal
+      {openLayer && (
+        <LayerFeaturesModal
           ctx={ctx}
-          list={openList}
-          onChange={(members) => updateList(openList.id, { members })}
-          onClose={() => setOpenListId(null)}
+          layer={openLayer}
+          onChange={(features) => updateLayer(openLayer.id, { features })}
+          onClose={() => setOpenLayerId(null)}
         />
       )}
     </div>

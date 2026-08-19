@@ -7,7 +7,7 @@ import { dataService } from '@/lib/services/dataService';
 import { AddonContext } from '@/lib/types/bms';
 import { HealthRiskCategory, House, Village } from '@/lib/types/gis';
 import { AppSettings, DEFAULT_SETTINGS, loadSettings } from '@/lib/services/settingsStore';
-import { BaseTileLayer, PlacePoint } from '@/components/gis/MapView';
+import { BaseTileLayer, MapFeature } from '@/components/gis/MapView';
 import Navbar from '@/components/layout/Navbar';
 import RightPanel from '@/components/drawers/RightPanel';
 import HouseModal from '@/components/modals/HouseModal';
@@ -39,7 +39,7 @@ export default function CatchmentGisPage() {
   const [houses, setHouses] = useState<House[]>([]);
   const [selectedVillageId, setSelectedVillageId] = useState<number | 'all'>('all');
   const [healthGroup, setHealthGroup] = useState<HealthRiskCategory | 'all'>('all');
-  // Configured on /setting and shared through localStorage
+  // Configured on /setting/layer and shared through localStorage
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [baseLayer, setBaseLayer] = useState<BaseTileLayer>('osm');
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
@@ -78,16 +78,16 @@ export default function CatchmentGisPage() {
     initApp();
   }, [loadData]);
 
-  // Re-classify houses against the criteria and case list configured on /setting
+  // Re-classify houses against the criteria and case list configured on /setting/layer
   const classifiedHouses = useMemo(() => {
-    const { vulnerableCriteria, groupLists } = settings;
+    const { vulnerableCriteria, layers } = settings;
 
-    // Only lists switched on for the map contribute members
-    const houseIdsOf = (group: 'vulnerable' | 'epidemic') =>
+    // Only layers switched on for the map contribute houses
+    const houseIdsOf = (kind: 'vulnerable' | 'epidemic') =>
       new Set(
-        groupLists
-          .filter((l) => l.group === group && l.activeOnMap)
-          .flatMap((l) => l.members.map((m) => m.house_id))
+        layers
+          .filter((l) => l.visible && l.kind === kind)
+          .flatMap((l) => l.features.map((f) => f.person?.house_id))
       );
     const vulnerableListHouseIds = houseIdsOf('vulnerable');
     const epidemicHouseIds = houseIdsOf('epidemic');
@@ -115,21 +115,22 @@ export default function CatchmentGisPage() {
     });
   }, [houses, settings]);
 
-  // Partner / resource points from lists switched on for the map
-  const placePoints = useMemo<PlacePoint[]>(() => {
-    return settings.groupLists
-      .filter((l) => l.activeOnMap && (l.group === 'partner' || l.group === 'resource'))
+  // Everything drawn on top of the houses: one entry per feature of a visible
+  // layer. 'home' geometries are skipped — the person's house marker is already
+  // on the map and gets recoloured by the classification above.
+  const mapFeatures = useMemo<MapFeature[]>(() => {
+    return settings.layers
+      .filter((l) => l.visible)
       .flatMap((l) =>
-        l.members
-          .filter((m) => m.latitude !== undefined && m.longitude !== undefined)
-          .map((m) => ({
-            id: m.place_id || `${l.id}-${m.place_name}`,
-            name: m.place_name || 'ไม่ระบุชื่อ',
-            latitude: m.latitude as number,
-            longitude: m.longitude as number,
-            note: m.note,
-            group: l.group as 'partner' | 'resource',
-            listName: l.name
+        l.features
+          .filter((f) => f.geometry.type !== 'home')
+          .map((f) => ({
+            id: f.id,
+            name: f.name,
+            kind: l.kind,
+            layerName: l.name,
+            geometry: f.geometry as MapFeature['geometry'],
+            attribute: f.attribute
           }))
       );
   }, [settings]);
@@ -230,7 +231,7 @@ export default function CatchmentGisPage() {
             pickedLat={null}
             pickedLng={null}
             selectedHouseId={selectedHouse?.house_id}
-            placePoints={placePoints}
+            mapFeatures={mapFeatures}
             onHouseSelect={handleMarkerSelect}
             onBaseLayerChange={(l) => setBaseLayer(l)}
           />

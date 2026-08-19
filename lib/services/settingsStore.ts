@@ -1,7 +1,10 @@
 import { AddonContext } from '../types/bms';
 import {
+  DEFAULT_LAYERS,
   DEFAULT_VULNERABLE_CRITERIA,
-  GroupList,
+  GroupKind,
+  LayerFeature,
+  LayerSetting,
   VulnerableCriteria
 } from '../types/gis';
 
@@ -12,24 +15,114 @@ const LOCAL_FALLBACK_KEY = 'bms-gis-settings';
 
 export interface AppSettings {
   vulnerableCriteria: VulnerableCriteria;
-  groupLists: GroupList[];
+  layers: LayerSetting[];
   showHeatmap: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   vulnerableCriteria: DEFAULT_VULNERABLE_CRITERIA,
-  groupLists: [],
+  layers: DEFAULT_LAYERS,
   showHeatmap: false
 };
 
 /** Version of the stored value, used for optimistic concurrency on write */
 let knownVersion: number | undefined;
 
+const KINDS: GroupKind[] = ['vulnerable', 'epidemic', 'partner', 'resource'];
+
+const GEOMETRY_TYPES = ['home', 'point', 'circle', 'polygon', 'line'];
+
+/** Fallback ids for features stored before they had one — unique across the load */
+let featureSeq = 0;
+
+function isPath(p: any): boolean {
+  return Array.isArray(p) && p.length >= 2 && p.every((c) => Array.isArray(c) && c.length === 2);
+}
+
+/**
+ * Features gained a geometry when the add-methods were introduced. Entries
+ * saved before that were either a person (no coordinate — the house carried it)
+ * or a pinned place, so both shapes are lifted onto the new model here.
+ */
+function normaliseFeature(raw: any): LayerFeature | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const person = typeof raw.person_id === 'number'
+    ? {
+        person_id: raw.person_id,
+        house_id: raw.house_id,
+        hn: raw.hn,
+        house_address: raw.house_address,
+        village_moo: raw.village_moo,
+        treatment_start_date: raw.treatment_start_date
+      }
+    : raw.person;
+
+  let geometry: any = raw.geometry;
+  if (!geometry || !GEOMETRY_TYPES.includes(geometry.type)) {
+    geometry = typeof raw.latitude === 'number' && typeof raw.longitude === 'number'
+      ? { type: 'point', lat: raw.latitude, lng: raw.longitude }
+      : { type: 'home' };
+  }
+  // A geometry that lost its coordinates cannot be drawn; only 'home' may have none
+  if (geometry.type === 'point' && typeof geometry.lat !== 'number') return null;
+  if (geometry.type === 'circle' && (typeof geometry.lat !== 'number' || typeof geometry.radius !== 'number')) return null;
+  if ((geometry.type === 'polygon' || geometry.type === 'line') && !isPath(geometry.path)) return null;
+  if (geometry.type === 'home' && !person) return null;
+
+  const name = raw.name || raw.place_name || raw.person_name;
+  return {
+    id: raw.id || raw.place_id || `feature-${++featureSeq}`,
+    name: typeof name === 'string' && name.trim() ? name : 'ไม่ระบุชื่อ',
+    geometry,
+    attribute: raw.attribute?.key
+      ? { key: String(raw.attribute.key), value: String(raw.attribute.value ?? '') }
+      : (raw.note ? { key: 'หมายเหตุ', value: String(raw.note) } : undefined),
+    ...(person ? { person } : {})
+  };
+}
+
+function normaliseFeatures(raw: any): LayerFeature[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normaliseFeature).filter((f): f is LayerFeature => f !== null);
+}
+
+/**
+ * Layers are user-editable, so the stored array is authoritative — but entries
+ * are sanitised and settings saved before layers existed fall back to the
+ * built-in set. Older entries carry no id; there it matches the kind.
+ */
+function normaliseLayers(raw: any, rawGroupLists: any): LayerSetting[] {
+  const base: LayerSetting[] = Array.isArray(raw)
+    ? // An empty array is a real state (every layer deleted), not a missing field
+      raw
+        .filter((l) => l && KINDS.includes(l.kind) && typeof l.name === 'string' && l.name.trim())
+        .map((l) => ({
+          id: typeof l.id === 'string' && l.id ? l.id : (l.kind as string),
+          kind: l.kind as GroupKind,
+          name: l.name as string,
+          visible: l.visible !== false,
+          features: normaliseFeatures(l.features)
+        }))
+    : DEFAULT_LAYERS.map((l) => ({ ...l, features: [] }));
+
+  // Sub-groups were removed: lift the members of any stored list into its layer
+  const legacyLists: any[] = Array.isArray(rawGroupLists) ? rawGroupLists : [];
+  if (!legacyLists.length) return base;
+  return base.map((layer) => ({
+    ...layer,
+    features: [
+      ...layer.features,
+      ...legacyLists.filter((l) => l && l.group === layer.id).flatMap((l) => normaliseFeatures(l.members))
+    ]
+  }));
+}
+
 function normalise(raw: any): AppSettings {
   if (!raw || typeof raw !== 'object') return DEFAULT_SETTINGS;
   return {
     vulnerableCriteria: { ...DEFAULT_VULNERABLE_CRITERIA, ...(raw.vulnerableCriteria || {}) },
-    groupLists: Array.isArray(raw.groupLists) ? raw.groupLists : [],
+    layers: normaliseLayers(raw.layers, raw.groupLists),
     showHeatmap: !!raw.showHeatmap
   };
 }

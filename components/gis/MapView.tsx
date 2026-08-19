@@ -2,23 +2,34 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Ruler, Pentagon, CircleDashed, Trash2 } from 'lucide-react';
-import { DEFAULT_MAP_CENTER, DEFAULT_ZOOM, HealthRiskCategory, House, TILE_PROVIDERS } from '@/lib/types/gis';
+import {
+  DEFAULT_MAP_CENTER,
+  DEFAULT_ZOOM,
+  FeatureGeometry,
+  GroupKind,
+  HealthRiskCategory,
+  House,
+  TILE_PROVIDERS
+} from '@/lib/types/gis';
 
 export type GisLayerDisplayMode = 'point' | 'cluster';
 export type BaseTileLayer = 'osm' | 'satellite' | 'dark';
 export type MapTool = 'none' | 'distance' | 'polygon' | 'radius';
 
-export interface PlacePoint {
+/** A drawn entry of a visible layer. 'home' geometries never reach here — the
+ *  house marker already stands for them. */
+export interface MapFeature {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
-  note?: string;
-  group: 'partner' | 'resource';
-  listName: string;
+  kind: GroupKind;
+  layerName: string;
+  geometry: Exclude<FeatureGeometry, { type: 'home' }>;
+  attribute?: { key: string; value: string };
 }
 
-const PLACE_STYLE = {
+const LAYER_STYLE: Record<GroupKind, { color: string; label: string }> = {
+  vulnerable: { color: '#ea580c', label: 'กลุ่มติดตามต่อเนื่อง' },
+  epidemic: { color: '#dc2626', label: 'ระบาดวิทยา' },
   partner: { color: '#7c3aed', label: 'ภาคีเครือข่าย' },
   resource: { color: '#0d9488', label: 'ทรัพยากรสุขภาพ' }
 };
@@ -33,8 +44,8 @@ export interface MapViewProps {
   pickedLat?: number | null;
   pickedLng?: number | null;
   selectedHouseId?: number | null;
-  /** Partner / resource points from lists switched on for the map */
-  placePoints?: PlacePoint[];
+  /** Features of every layer switched on for the map */
+  mapFeatures?: MapFeature[];
   onHouseSelect: (house: House) => void;
   onBaseLayerChange?: (layer: BaseTileLayer) => void;
   onCoordinatePicked?: (lat: number, lng: number) => void;
@@ -106,7 +117,7 @@ export default function MapView({
   pickedLat = null,
   pickedLng = null,
   selectedHouseId = null,
-  placePoints = [],
+  mapFeatures = [],
   onHouseSelect,
   onBaseLayerChange,
   onCoordinatePicked
@@ -511,7 +522,7 @@ export default function MapView({
     renderLayers();
   }, [isMapReady, houses, displayMode, showHeatmap, isPickMode, onHouseSelect]);
 
-  // 3b. Partner / resource points
+  // 3b. Layer features: points, circles, polygons and lines
   useEffect(() => {
     const map = mapInstanceRef.current;
     const L = leafletRef.current;
@@ -519,40 +530,52 @@ export default function MapView({
 
     const group = L.layerGroup().addTo(map);
 
-    placePoints.forEach((p) => {
-      const style = PLACE_STYLE[p.group];
-      const icon = L.divIcon({
-        html: `
-          <div class="place-marker" style="--place-color: ${style.color}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
+    mapFeatures.forEach((f) => {
+      const style = LAYER_STYLE[f.kind];
+      const popup = `
+        <div class="house-popup-card">
+          <div class="popup-header">
+            <div class="popup-title"><strong>${f.name}</strong></div>
+            <span class="health-tag" style="background:${style.color}1a;color:${style.color}">${style.label}</span>
           </div>
-        `,
-        className: 'place-marker-wrapper',
-        iconSize: [28, 28],
-        iconAnchor: [14, 28],
-        popupAnchor: [0, -26]
-      });
+          <div class="popup-village">${f.layerName}</div>
+          ${f.attribute ? `<div class="popup-body"><div class="popup-row"><span class="popup-label">${f.attribute.key}</span><span class="popup-val">${f.attribute.value}</span></div></div>` : ''}
+        </div>
+      `;
 
-      L.marker([p.latitude, p.longitude], { icon })
-        .bindPopup(`
-          <div class="house-popup-card">
-            <div class="popup-header">
-              <div class="popup-title"><strong>${p.name}</strong></div>
-              <span class="health-tag" style="background:${style.color}1a;color:${style.color}">${style.label}</span>
+      const shapeStyle = { color: style.color, fillColor: style.color, fillOpacity: 0.15, weight: 2.5 };
+      let shape: any;
+
+      if (f.geometry.type === 'point') {
+        const icon = L.divIcon({
+          html: `
+            <div class="place-marker" style="--place-color: ${style.color}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
             </div>
-            <div class="popup-village">${p.listName}</div>
-            ${p.note ? `<div class="popup-body"><div class="popup-row"><span class="popup-val">${p.note}</span></div></div>` : ''}
-          </div>
-        `, { className: 'custom-house-popup', maxWidth: 260 })
-        .addTo(group);
+          `,
+          className: 'place-marker-wrapper',
+          iconSize: [28, 28],
+          iconAnchor: [14, 28],
+          popupAnchor: [0, -26]
+        });
+        shape = L.marker([f.geometry.lat, f.geometry.lng], { icon });
+      } else if (f.geometry.type === 'circle') {
+        shape = L.circle([f.geometry.lat, f.geometry.lng], { ...shapeStyle, radius: f.geometry.radius });
+      } else if (f.geometry.type === 'polygon') {
+        shape = L.polygon(f.geometry.path, shapeStyle);
+      } else {
+        shape = L.polyline(f.geometry.path, { color: style.color, weight: f.geometry.weight });
+      }
+
+      shape.bindPopup(popup, { className: 'custom-house-popup', maxWidth: 260 }).addTo(group);
     });
 
     return () => {
       map.removeLayer(group);
     };
-  }, [isMapReady, placePoints]);
+  }, [isMapReady, mapFeatures]);
 
   // 4. Fly to the selected house, then open its info popup on arrival
   useEffect(() => {

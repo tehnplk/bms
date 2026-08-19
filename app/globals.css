@@ -322,52 +322,100 @@ html, body {
   gap: 20px;
 }
 
-.setting-tabs {
+.setting-layer-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.setting-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feature-method-tabs {
   display: flex;
   gap: 4px;
   padding: 4px;
-  background: #ffffff;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  margin-bottom: 14px;
+  background: #f1f5f9;
+  border-radius: var(--radius-md);
 }
 
-.setting-tab-btn {
+.feature-method-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   flex: 1;
-  height: 40px;
-  padding: 0 14px;
+  height: 34px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
   font-family: inherit;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.setting-tab-btn:hover {
-  background: #f1f5f9;
+.feature-method-btn:hover {
   color: var(--text-main);
 }
 
-.setting-tab-btn.active {
-  background: var(--primary-light);
+.feature-method-btn.active {
+  background: #ffffff;
   color: var(--primary-dark);
+  box-shadow: var(--shadow-sm);
 }
 
-.setting-tab-badge {
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  background: #be123c;
-  color: #ffffff;
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
+.feature-coord-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.feature-coord-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.feature-coord-choice input[type='radio'] {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.geometry-picker-radius {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.geometry-picker-radius .setting-number {
+  width: 110px;
+}
+
+.setting-grid-select {
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  cursor: pointer;
 }
 
 .setting-card {

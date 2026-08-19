@@ -142,7 +142,7 @@ export default function Navbar({
           <Map size={20} style={{ color: '#0284c7' }} />
         </div>
         <div className="brand-text">
-          <div className="brand-title">Welness Map View</div>
+          <div className="brand-title">Welness Top View</div>
           <div className="brand-subtitle">ชุมชนสุขภาวะ</div>
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function Navbar({
       {/* Right Controls: Hospital Badge, Tile Switcher, Right Panel Toggle & Refresh */}
       <div className="navbar-actions">
         {/* Settings Page Link */}
-        <Link href="/setting" className="navbar-icon-btn panel-toggle-btn" title="ตั้งค่ากลุ่มติดตามต่อเนื่อง และกลุ่มระบาดวิทยา">
+        <Link href="/setting/layer" className="navbar-icon-btn panel-toggle-btn" title="ตั้งค่ากลุ่มติดตามต่อเนื่อง และกลุ่มระบาดวิทยา">
           <Settings size={17} />
           <span className="btn-label-responsive">ตั้งค่า</span>
         </Link>
